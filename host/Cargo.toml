@@ -11,3 +11,4 @@ uniswap_v3_math = { path = "../uniswap-v3-math", features = [
     "ethers_providers",
     "ethers_contract",
 ] }
+ethers-core = { version = "2.0" }
