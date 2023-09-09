@@ -7,3 +7,4 @@ edition = "2021"
 methods = { path = "../methods" }
 risc0-zkvm = { version = "0.17.0" }
 serde = "1.0"
+uniswap-v3-math = { path = "../uniswap-v3-math", features = ["ethers"] }

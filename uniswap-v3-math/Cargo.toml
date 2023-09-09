@@ -1,0 +1,16 @@
+[package]
+name = "uniswap_v3_math"
+version = "0.4.0"
+edition = "2021"
+license = "MIT"
+description = "Uniswap V3 math in Rust"
+readme = "README.md"
+homepage = "https://github.com/0xKitsune/uniswap_v3_math"
+repository = "https://github.com/0xKitsune/uniswap_v3_math"
+keywords = ["uniswapV3", "math"]
+exclude = ["target/*", ".github/*", ".gitignore", "Uniswap/*"]
+
+[dependencies]
+ethers = { version = "2.0.0", default-features = false, features = ["abigen"] }
+ruint = "1.7.0"
+thiserror = "1.0.38"
