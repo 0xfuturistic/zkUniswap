@@ -7,8 +7,5 @@ edition = "2021"
 methods = { path = "../methods" }
 risc0-zkvm = { version = "0.17.0" }
 serde = "1.0"
-uniswap_v3_math = { path = "../uniswap-v3-math", features = [
-    "ethers_providers",
-    "ethers_contract",
-] }
+uniswap_v3_math = { path = "../uniswap-v3-math" }
 ethers-core = { version = "2.0" }
