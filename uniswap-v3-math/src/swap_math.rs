@@ -1,4 +1,4 @@
-use ethers::types::{I256, U256};
+use ethers_core::types::{I256, U256};
 
 use crate::{
     error::UniswapV3MathError,
@@ -155,7 +155,7 @@ mod test {
     #[allow(unused)]
     use crate::swap_math::compute_swap_step;
     #[allow(unused)]
-    use ethers::types::{I256, U256};
+    use ethers_core::types::{I256, U256};
 
     #[test]
     fn test_compute_swap_step() {

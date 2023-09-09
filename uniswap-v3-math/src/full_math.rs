@@ -1,4 +1,4 @@
-use ethers::types::U256;
+use ethers_core::types::U256;
 use std::ops::{Add, BitAnd, BitOrAssign, BitXor, Div, Mul, MulAssign};
 
 use crate::{
@@ -134,7 +134,7 @@ pub fn mul_div_rounding_up(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ethers::types::U256;
+    use ethers_core::types::U256;
 
     const Q128: U256 = U256([0, 0, 1, 0]);
 
@@ -165,7 +165,7 @@ mod test {
 
     use std::ops::{Div, Mul, Sub};
 
-    use ethers::types::U256;
+    use ethers_core::types::U256;
 
     use super::mul_div;
 

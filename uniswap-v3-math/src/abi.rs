@@ -1,8 +1,11 @@
-use ethers::contract::abigen;
+#[cfg(feature = "ethers")]
+pub mod ethers {
+    use ethers_contract::abigen;
 
-abigen!(
-    IUniswapV3Pool,
-    r#"[
-        function tickBitmap(int16) external returns (uint256)
-    ]"#;
-);
+    abigen!(
+        IUniswapV3Pool,
+        r#"[
+            function tickBitmap(int16) external returns (uint256)
+        ]"#;
+    );
+}

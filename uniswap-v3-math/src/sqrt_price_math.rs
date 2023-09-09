@@ -4,7 +4,7 @@ use crate::{
     unsafe_math::div_rounding_up,
     utils::{ruint_to_u256, u256_to_ruint},
 };
-use ethers::types::{I256, U256};
+use ethers_core::types::{I256, U256};
 
 pub const MAX_U160: U256 = U256([18446744073709551615, 18446744073709551615, 4294967295, 0]);
 pub const Q96: U256 = U256([0, 4294967296, 0, 0]);
@@ -237,7 +237,7 @@ pub fn get_amount_1_delta(
 mod test {
     use std::ops::{Add, Sub};
 
-    use ethers::types::U256;
+    use ethers_core::types::U256;
 
     use crate::sqrt_price_math::{_get_amount_1_delta, get_next_sqrt_price_from_output, MAX_U160};
 

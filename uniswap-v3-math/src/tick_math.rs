@@ -1,6 +1,6 @@
 use std::ops::{BitOr, Neg, Shl, Shr};
 
-use ethers::types::{I256, U256};
+use ethers_core::types::{I256, U256};
 
 use crate::error::UniswapV3MathError;
 
@@ -216,7 +216,7 @@ pub fn get_tick_at_sqrt_ratio(sqrt_price_x_96: U256) -> Result<i32, UniswapV3Mat
 #[cfg(test)]
 mod test {
     use super::*;
-    use ethers::types::U256;
+    use ethers_core::types::U256;
     use std::ops::Sub;
 
     #[test]

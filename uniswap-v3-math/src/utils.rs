@@ -1,4 +1,4 @@
-use ethers::types::U256;
+use ethers_core::types::U256;
 use ruint::Uint;
 
 pub const RUINT_ZERO: Uint<256, 4> = Uint::ZERO;

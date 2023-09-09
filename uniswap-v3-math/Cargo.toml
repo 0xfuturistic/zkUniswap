@@ -11,6 +11,26 @@ keywords = ["uniswapV3", "math"]
 exclude = ["target/*", ".github/*", ".gitignore", "Uniswap/*"]
 
 [dependencies]
-ethers = { version = "2.0.0", default-features = false, features = ["abigen"] }
+bytes = { version = "1.1", default-features = false }
+ethers-core = { version = "2.0" }
+ethers-providers = { version = "2.0", optional = true }
+ethers-contract = { version = "2.0.10", optional = true }
+futures = { version = "0.3", optional = true }
+getrandom = { version = "0.2", features = ["custom"] }
+primitive-types = { version = "0.12", features = ["serde"] }
+revm = { version = "3.3", default-features = false, features = [
+    "std",
+    "serde",
+] }
+serde = "1.0"
+tokio = { version = "1.23", features = [
+    "rt-multi-thread",
+    "macros",
+], optional = true }
 ruint = "1.7.0"
 thiserror = "1.0.38"
+
+
+[features]
+default = ["ethers"]
+ethers = ["tokio", "futures", "ethers-providers", "ethers-contract"]
