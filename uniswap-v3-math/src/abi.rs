@@ -1,4 +1,4 @@
-#[cfg(feature = "ethers")]
+#[cfg(feature = "ethers_contract")]
 pub mod ethers {
     use ethers_contract::abigen;
 

@@ -55,11 +55,11 @@ pub fn next_initialized_tick_within_one_word(
     }
 }
 
-#[cfg(feature = "ethers")]
+#[cfg(feature = "ethers_providers")]
 pub mod ethers {
-    use ethers_providers::Middleware;
     use crate::{abi::ethers::IUniswapV3Pool, bit_math, error::UniswapV3MathError, tick_bitmap::position};
     use ethers_core::types::{BlockNumber, H160, U256};
+    use ethers_providers::Middleware;
     use std::{collections::HashMap, sync::Arc};
 
     //Returns next and initialized. This function calls the node to get the word at the word_pos.

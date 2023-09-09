@@ -32,5 +32,6 @@ thiserror = "1.0.38"
 
 
 [features]
-default = ["ethers"]
-ethers = ["tokio", "futures", "ethers-providers", "ethers-contract"]
+default = ["ethers_providers", "ethers_contract"]
+ethers_providers = ["tokio", "futures", "ethers-providers"]
+ethers_contract = ["tokio", "futures", "ethers-contract"]
