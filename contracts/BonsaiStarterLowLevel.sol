@@ -27,11 +27,11 @@ contract BonsaiStarterLowLevel is BonsaiLowLevelCallbackReceiver {
     mapping(uint256 => uint256) public fibonacciCache;
 
     // The image id of the only binary we accept callbacks from
-    bytes32 public immutable fibImageId;
+    bytes32 public immutable swapImageId;
 
     /// @notice Initialize the contract, binding it to a specified Bonsai relay and RISC Zero guest image.
-    constructor(IBonsaiRelay bonsaiRelay, bytes32 _fibImageId) BonsaiLowLevelCallbackReceiver(bonsaiRelay) {
-        fibImageId = _fibImageId;
+    constructor(IBonsaiRelay bonsaiRelay, bytes32 _swapImageId) BonsaiLowLevelCallbackReceiver(bonsaiRelay) {
+        swapImageId = _swapImageId;
     }
 
     event CalculateFibonacciCallback(uint256 indexed n, uint256 result);
@@ -47,7 +47,7 @@ contract BonsaiStarterLowLevel is BonsaiLowLevelCallbackReceiver {
 
     /// @notice Callback function logic for processing verified journals from Bonsai.
     function bonsaiLowLevelCallback(bytes calldata journal, bytes32 imageId) internal override returns (bytes memory) {
-        require(imageId == fibImageId);
+        require(imageId == swapImageId);
         (uint256 n, uint256 result) = abi.decode(journal, (uint256, uint256));
         emit CalculateFibonacciCallback(n, result);
         fibonacciCache[n] = result;
@@ -60,7 +60,7 @@ contract BonsaiStarterLowLevel is BonsaiLowLevelCallbackReceiver {
     ///      the given input and asynchronously return the verified results via the callback below.
     function calculateFibonacci(uint256 n) external {
         bonsaiRelay.requestCallback(
-            fibImageId, abi.encode(n), address(this), this.bonsaiLowLevelCallbackReceiver.selector, 30000
+            swapImageId, abi.encode(n), address(this), this.bonsaiLowLevelCallbackReceiver.selector, 30000
         );
     }
 }

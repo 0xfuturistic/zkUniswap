@@ -20,7 +20,10 @@ import "./lib/Tick.sol";
 import "./lib/TickBitmap.sol";
 import "./lib/TickMath.sol";
 
-contract UniswapV3Pool is IUniswapV3Pool {
+import {IBonsaiRelay} from "bonsai/IBonsaiRelay.sol";
+import {BonsaiLowLevelCallbackReceiver} from "bonsai/BonsaiLowLevelCallbackReceiver.sol";
+
+contract UniswapV3Pool is IUniswapV3Pool, BonsaiLowLevelCallbackReceiver {
     using Oracle for Oracle.Observation[65535];
     using Position for Position.Info;
     using Position for mapping(bytes32 => Position.Info);
@@ -135,8 +138,9 @@ contract UniswapV3Pool is IUniswapV3Pool {
     mapping(bytes32 => Position.Info) public positions;
     Oracle.Observation[65535] public observations;
 
-    constructor() {
+    constructor(IBonsaiRelay bonsaiRelay, bytes32 _swapImageId) BonsaiLowLevelCallbackReceiver(bonsaiRelay) {
         (factory, token0, token1, tickSpacing, fee) = IUniswapV3PoolDeployer(msg.sender).parameters();
+        swapImageId = _swapImageId;
     }
 
     function initialize(uint160 sqrtPriceX96) public {
@@ -387,18 +391,6 @@ contract UniswapV3Pool is IUniswapV3Pool {
             }
         }
 
-        (amount0, amount1) = _swap(recipient, zeroForOne, amountSpecified, data, state, slot0_, liquidity_);
-    }
-
-    function _swap(
-        address recipient,
-        bool zeroForOne,
-        uint256 amountSpecified,
-        bytes calldata data,
-        SwapState memory state,
-        Slot0 memory slot0_,
-        uint160 liquidity_
-    ) internal returns (int256 amount0, int256 amount1) {
         if (state.tick != slot0_.tick) {
             (uint16 observationIndex, uint16 observationCardinality) = observations.write(
                 slot0_.observationIndex,
@@ -445,20 +437,69 @@ contract UniswapV3Pool is IUniswapV3Pool {
         }
 
         emit Swap(msg.sender, recipient, amount0, amount1, slot0.sqrtPriceX96, state.liquidity, slot0.tick);
-
-        return (amount0, amount1);
     }
 
-    function swap(
+    function requestSwapCallback(
         address recipient,
         bool zeroForOne,
         uint256 amountSpecified,
         uint160 sqrtPriceLimitX96,
-        bytes calldata data,
-        bytes calldata journal,
-        bytes32 imageId
-    ) public returns (int256 amount0, int256 amount1) {
+        bytes calldata data
+    ) public {
+        // Caching for gas saving
+        Slot0 memory slot0_ = slot0;
+        uint128 liquidity_ = liquidity;
+
+        if (
+            zeroForOne
+                ? sqrtPriceLimitX96 > slot0_.sqrtPriceX96 || sqrtPriceLimitX96 < TickMath.MIN_SQRT_RATIO
+                : sqrtPriceLimitX96 < slot0_.sqrtPriceX96 || sqrtPriceLimitX96 > TickMath.MAX_SQRT_RATIO
+        ) revert InvalidPriceLimit();
+
+        SwapState memory state = SwapState({
+            amountSpecifiedRemaining: amountSpecified,
+            amountCalculated: 0,
+            sqrtPriceX96: slot0_.sqrtPriceX96,
+            tick: slot0_.tick,
+            feeGrowthGlobalX128: zeroForOne ? feeGrowthGlobal0X128 : feeGrowthGlobal1X128,
+            liquidity: liquidity_
+        });
+
+        while (state.amountSpecifiedRemaining > 0 && state.sqrtPriceX96 != sqrtPriceLimitX96) {
+            StepState memory step;
+
+            step.sqrtPriceStartX96 = state.sqrtPriceX96;
+
+            (step.nextTick,) = tickBitmap.nextInitializedTickWithinOneWord(state.tick, int24(tickSpacing), zeroForOne);
+
+            step.sqrtPriceNextX96 = TickMath.getSqrtRatioAtTick(step.nextTick);
+
+            bonsaiRelay.requestCallback(
+                swapImageId,
+                abi.encode(
+                    abi.encode(recipient, zeroForOne, amountSpecified, sqrtPriceLimitX96, data),
+                    state.sqrtPriceX96,
+                    (zeroForOne ? step.sqrtPriceNextX96 < sqrtPriceLimitX96 : step.sqrtPriceNextX96 > sqrtPriceLimitX96)
+                        ? sqrtPriceLimitX96
+                        : step.sqrtPriceNextX96,
+                    state.liquidity,
+                    state.amountSpecifiedRemaining,
+                    fee
+                ),
+                address(this),
+                this.bonsaiLowLevelCallbackReceiver.selector,
+                30000
+            );
+        }
+    }
+
+    function bonsaiLowLevelCallback(bytes calldata journal, bytes32 imageId) internal override returns (bytes memory) {
         require(imageId == swapImageId);
+        (bytes memory inputs, uint160 sqrtPriceNextX96, uint256 amountIn, uint256 amountOut, uint256 feeAmount) =
+            abi.decode(journal, (bytes, uint160, uint256, uint256, uint256));
+
+        (address recipient, bool zeroForOne, uint256 amountSpecified, uint160 sqrtPriceLimitX96, bytes memory data) =
+            abi.decode(inputs, (address, bool, uint256, uint160, bytes));
 
         // Caching for gas saving
         Slot0 memory slot0_ = slot0;
@@ -488,37 +529,11 @@ contract UniswapV3Pool is IUniswapV3Pool {
 
             step.sqrtPriceNextX96 = TickMath.getSqrtRatioAtTick(step.nextTick);
 
-            (
-                uint160 sqrtPriceCurrentX96Journal,
-                uint160 sqrtPriceTargetX96Journal,
-                uint128 liquidityJournal,
-                uint256 amountRemainingJournal,
-                uint24 feeJournal,
-                uint160 sqrtPriceNextX96Journal,
-                uint256 amountInJournal,
-                uint256 amountOutJournal,
-                uint256 feeAmountJournal
-            ) = abi.decode(journal, (uint160, uint160, uint128, uint256, uint24, uint160, uint256, uint256, uint256));
-
-            // Validate inputs in journal
-            if (sqrtPriceCurrentX96Journal != state.sqrtPriceX96) revert InvalidJournal();
-            if (
-                sqrtPriceTargetX96Journal
-                    != (
-                        (zeroForOne ? step.sqrtPriceNextX96 < sqrtPriceLimitX96 : step.sqrtPriceNextX96 > sqrtPriceLimitX96)
-                            ? sqrtPriceLimitX96
-                            : step.sqrtPriceNextX96
-                    )
-            ) revert InvalidJournal();
-            if (liquidityJournal != state.liquidity) revert InvalidJournal();
-            if (amountRemainingJournal != state.amountSpecifiedRemaining) revert InvalidJournal();
-            if (feeJournal != fee) revert InvalidJournal();
-
-            // Write outputs in journal
-            state.sqrtPriceX96 = sqrtPriceNextX96Journal;
-            step.amountIn = amountInJournal;
-            step.amountOut = amountOutJournal;
-            step.feeAmount = feeAmountJournal;
+            // write outputs from journal
+            state.sqrtPriceX96 = sqrtPriceNextX96;
+            step.amountIn = amountIn;
+            step.amountOut = amountOut;
+            step.feeAmount = feeAmount;
 
             state.amountSpecifiedRemaining -= step.amountIn + step.feeAmount;
             state.amountCalculated += step.amountOut;
@@ -546,7 +561,54 @@ contract UniswapV3Pool is IUniswapV3Pool {
             }
         }
 
-        (amount0, amount1) = _swap(recipient, zeroForOne, amountSpecified, data, state, slot0_, liquidity_);
+        if (state.tick != slot0_.tick) {
+            (uint16 observationIndex, uint16 observationCardinality) = observations.write(
+                slot0_.observationIndex,
+                _blockTimestamp(),
+                slot0_.tick,
+                slot0_.observationCardinality,
+                slot0_.observationCardinalityNext
+            );
+
+            (slot0.sqrtPriceX96, slot0.tick, slot0.observationIndex, slot0.observationCardinality) =
+                (state.sqrtPriceX96, state.tick, observationIndex, observationCardinality);
+        } else {
+            slot0.sqrtPriceX96 = state.sqrtPriceX96;
+        }
+
+        if (liquidity_ != state.liquidity) liquidity = state.liquidity;
+
+        if (zeroForOne) {
+            feeGrowthGlobal0X128 = state.feeGrowthGlobalX128;
+        } else {
+            feeGrowthGlobal1X128 = state.feeGrowthGlobalX128;
+        }
+
+        (int256 amount0, int256 amount1) = zeroForOne
+            ? (int256(amountSpecified - state.amountSpecifiedRemaining), -int256(state.amountCalculated))
+            : (-int256(state.amountCalculated), int256(amountSpecified - state.amountSpecifiedRemaining));
+
+        if (zeroForOne) {
+            IERC20(token1).transfer(recipient, uint256(-amount1));
+
+            uint256 balance0Before = balance0();
+            IUniswapV3SwapCallback(msg.sender).uniswapV3SwapCallback(amount0, amount1, data);
+            if (balance0Before + uint256(amount0) > balance0()) {
+                revert InsufficientInputAmount();
+            }
+        } else {
+            IERC20(token0).transfer(recipient, uint256(-amount0));
+
+            uint256 balance1Before = balance1();
+            IUniswapV3SwapCallback(msg.sender).uniswapV3SwapCallback(amount0, amount1, data);
+            if (balance1Before + uint256(amount1) > balance1()) {
+                revert InsufficientInputAmount();
+            }
+        }
+
+        emit Swap(msg.sender, recipient, amount0, amount1, slot0.sqrtPriceX96, state.liquidity, slot0.tick);
+
+        return abi.encode(amount0, amount1);
     }
 
     function flash(uint256 amount0, uint256 amount1, bytes calldata data) public {
