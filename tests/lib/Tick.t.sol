@@ -2,21 +2,16 @@
 pragma solidity ^0.8.14;
 
 import "forge-std/Test.sol";
-import "../../src/lib/Tick.sol";
+import "../../contracts/lib/Tick.sol";
 
 contract TickTest is Test {
     using Tick for mapping(int24 => Tick.Info);
+
     mapping(int24 => Tick.Info) ticks;
 
     function testGetFeeGrowthInsideUninitialized() public {
         // current tick is inside the range
-        (uint256 fee0, uint256 fee1) = ticks.getFeeGrowthInside(
-            -2,
-            2,
-            0,
-            15,
-            15
-        );
+        (uint256 fee0, uint256 fee1) = ticks.getFeeGrowthInside(-2, 2, 0, 15, 15);
         assertEq(fee0, 15);
         assertEq(fee1, 15);
 
@@ -40,13 +35,7 @@ contract TickTest is Test {
             feeGrowthOutside0X128: 2,
             feeGrowthOutside1X128: 3
         });
-        (uint256 fee0, uint256 fee1) = ticks.getFeeGrowthInside(
-            -2,
-            2,
-            0,
-            15,
-            15
-        );
+        (uint256 fee0, uint256 fee1) = ticks.getFeeGrowthInside(-2, 2, 0, 15, 15);
         assertEq(fee0, 13);
         assertEq(fee1, 12);
 

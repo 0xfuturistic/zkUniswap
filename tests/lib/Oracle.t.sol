@@ -3,7 +3,7 @@ pragma solidity ^0.8.14;
 
 import "forge-std/Test.sol";
 
-import "../../src/lib/Oracle.sol";
+import "../../contracts/lib/Oracle.sol";
 
 contract OracleTest is Test {
     using Oracle for Oracle.Observation[65535];
@@ -134,41 +134,17 @@ contract OracleTest is Test {
     function initialize(uint32 time, int24 tick_) internal {
         vm.warp(time);
 
-        oracle[0] = Oracle.Observation({
-            timestamp: blockTimestamp(),
-            tickCumulative: 0,
-            initialized: true
-        });
+        oracle[0] = Oracle.Observation({timestamp: blockTimestamp(), tickCumulative: 0, initialized: true});
 
         tick = tick_;
     }
 
-    function observeSingle(uint32 secondsAgo)
-        internal
-        view
-        returns (int56 tickCumulative)
-    {
-        tickCumulative = oracle.observeSingle(
-            blockTimestamp(),
-            secondsAgo,
-            tick,
-            index,
-            cardinality
-        );
+    function observeSingle(uint32 secondsAgo) internal view returns (int56 tickCumulative) {
+        tickCumulative = oracle.observeSingle(blockTimestamp(), secondsAgo, tick, index, cardinality);
     }
 
-    function observe(uint32[] memory secondsAgos)
-        internal
-        view
-        returns (int56[] memory tickCumulatives)
-    {
-        tickCumulatives = oracle.observe(
-            blockTimestamp(),
-            secondsAgos,
-            tick,
-            index,
-            cardinality
-        );
+    function observe(uint32[] memory secondsAgos) internal view returns (int56[] memory tickCumulatives) {
+        tickCumulatives = oracle.observe(blockTimestamp(), secondsAgos, tick, index, cardinality);
     }
 
     function grow(uint16 next) internal {
@@ -176,13 +152,7 @@ contract OracleTest is Test {
     }
 
     function write(int24 tick_) internal {
-        (index, cardinality) = oracle.write(
-            index,
-            blockTimestamp(),
-            tick,
-            cardinality,
-            cardinalityNext
-        );
+        (index, cardinality) = oracle.write(index, blockTimestamp(), tick, cardinality, cardinalityNext);
         tick = tick_;
     }
 

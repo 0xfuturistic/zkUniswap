@@ -4,15 +4,15 @@ pragma solidity ^0.8.14;
 import "forge-std/console.sol";
 import "forge-std/Script.sol";
 
-import "../src/interfaces/IUniswapV3Manager.sol";
-import "../src/lib/FixedPoint96.sol";
-import "../src/lib/Math.sol";
-import "../src/UniswapV3Factory.sol";
-import "../src/UniswapV3Manager.sol";
-import "../src/UniswapV3Pool.sol";
-import "../src/UniswapV3Quoter.sol";
-import "../test/ERC20Mintable.sol";
-import "../test/TestUtils.sol";
+import "../contracts/interfaces/IUniswapV3Manager.sol";
+import "../contracts/lib/FixedPoint96.sol";
+import "../contracts/lib/Math.sol";
+import "../contracts/UniswapV3Factory.sol";
+import "../contracts/UniswapV3Manager.sol";
+import "../contracts/UniswapV3Pool.sol";
+import "../contracts/UniswapV3Quoter.sol";
+import "../tests/ERC20Mintable.sol";
+import "../tests/TestUtils.sol";
 
 contract DeployDevelopment is Script, TestUtils {
     struct TokenBalances {
@@ -24,13 +24,7 @@ contract DeployDevelopment is Script, TestUtils {
     }
 
     TokenBalances balances =
-        TokenBalances({
-            uni: 200 ether,
-            usdc: 2_000_000 ether,
-            usdt: 2_000_000 ether,
-            wbtc: 20 ether,
-            weth: 100 ether
-        });
+        TokenBalances({uni: 200 ether, usdc: 2_000_000 ether, usdt: 2_000_000 ether, wbtc: 20 ether, weth: 100 ether});
 
     function run() public {
         // DEPLOYING STARGED
@@ -46,37 +40,13 @@ contract DeployDevelopment is Script, TestUtils {
         UniswapV3Manager manager = new UniswapV3Manager(address(factory));
         UniswapV3Quoter quoter = new UniswapV3Quoter(address(factory));
 
-        UniswapV3Pool wethUsdc = deployPool(
-            factory,
-            address(weth),
-            address(usdc),
-            3000,
-            5000
-        );
+        UniswapV3Pool wethUsdc = deployPool(factory, address(weth), address(usdc), 3000, 5000);
 
-        UniswapV3Pool wethUni = deployPool(
-            factory,
-            address(weth),
-            address(uni),
-            3000,
-            10
-        );
+        UniswapV3Pool wethUni = deployPool(factory, address(weth), address(uni), 3000, 10);
 
-        UniswapV3Pool wbtcUSDT = deployPool(
-            factory,
-            address(wbtc),
-            address(usdt),
-            3000,
-            20_000
-        );
+        UniswapV3Pool wbtcUSDT = deployPool(factory, address(wbtc), address(usdt), 3000, 20_000);
 
-        UniswapV3Pool usdtUSDC = deployPool(
-            factory,
-            address(usdt),
-            address(usdc),
-            500,
-            1
-        );
+        UniswapV3Pool usdtUSDC = deployPool(factory, address(usdt), address(usdc), 500, 1);
 
         uni.mint(msg.sender, balances.uni);
         usdc.mint(msg.sender, balances.usdc);
@@ -90,30 +60,10 @@ contract DeployDevelopment is Script, TestUtils {
         wbtc.approve(address(manager), 10 ether);
         weth.approve(address(manager), 11 ether);
 
-        manager.mint(
-            mintParams(
-                address(weth),
-                address(usdc),
-                4545,
-                5500,
-                1 ether,
-                5000 ether
-            )
-        );
-        manager.mint(
-            mintParams(address(weth), address(uni), 7, 13, 10 ether, 100 ether)
-        );
+        manager.mint(mintParams(address(weth), address(usdc), 4545, 5500, 1 ether, 5000 ether));
+        manager.mint(mintParams(address(weth), address(uni), 7, 13, 10 ether, 100 ether));
 
-        manager.mint(
-            mintParams(
-                address(wbtc),
-                address(usdt),
-                19400,
-                20500,
-                10 ether,
-                200_000 ether
-            )
-        );
+        manager.mint(mintParams(address(wbtc), address(usdt), 19400, 20500, 10 ether, 200_000 ether));
         manager.mint(
             mintParams(
                 address(usdt),

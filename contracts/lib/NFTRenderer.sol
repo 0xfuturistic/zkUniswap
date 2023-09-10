@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.14;
 
-import "openzeppelin/utils/Base64.sol";
-import "openzeppelin/utils/Strings.sol";
+import "openzeppelin/contracts/utils/Base64.sol";
+import "openzeppelin/contracts/utils/Strings.sol";
 
 import "../interfaces/IERC20.sol";
 import "../interfaces/IUniswapV3Pool.sol";
@@ -16,11 +16,7 @@ library NFTRenderer {
         uint24 fee;
     }
 
-    function render(RenderParams memory params)
-        internal
-        view
-        returns (string memory)
-    {
+    function render(RenderParams memory params) internal view returns (string memory) {
         IUniswapV3Pool pool = IUniswapV3Pool(params.pool);
         IERC20 token0 = IERC20(pool.token0());
         IERC20 token1 = IERC20(pool.token1());
@@ -38,13 +34,7 @@ library NFTRenderer {
             "</svg>"
         );
 
-        string memory description = renderDescription(
-            symbol0,
-            symbol1,
-            params.fee,
-            params.lowerTick,
-            params.upperTick
-        );
+        string memory description = renderDescription(symbol0, symbol1, params.fee, params.lowerTick, params.upperTick);
 
         string memory json = string.concat(
             '{"name":"Uniswap V3 Position",',
@@ -56,11 +46,7 @@ library NFTRenderer {
             '"}'
         );
 
-        return
-            string.concat(
-                "data:application/json;base64,",
-                Base64.encode(bytes(json))
-            );
+        return string.concat("data:application/json;base64,", Base64.encode(bytes(json)));
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -68,11 +54,11 @@ library NFTRenderer {
     // INTERNAL
     //
     ////////////////////////////////////////////////////////////////////////////
-    function renderBackground(
-        address owner,
-        int24 lowerTick,
-        int24 upperTick
-    ) internal pure returns (string memory background) {
+    function renderBackground(address owner, int24 lowerTick, int24 upperTick)
+        internal
+        pure
+        returns (string memory background)
+    {
         bytes32 key = keccak256(abi.encodePacked(owner, lowerTick, upperTick));
         uint256 hue = uint256(key) % 360;
 
@@ -86,30 +72,25 @@ library NFTRenderer {
         );
     }
 
-    function renderTop(
-        string memory symbol0,
-        string memory symbol1,
-        uint24 fee
-    ) internal pure returns (string memory top) {
+    function renderTop(string memory symbol0, string memory symbol1, uint24 fee)
+        internal
+        pure
+        returns (string memory top)
+    {
         top = string.concat(
             '<rect x="30" y="87" width="240" height="42"/>',
             '<text x="39" y="120" class="tokens" fill="#fff">',
             symbol0,
             "/",
             symbol1,
-            "</text>"
-            '<rect x="30" y="132" width="240" height="30"/>',
+            "</text>" '<rect x="30" y="132" width="240" height="30"/>',
             '<text x="39" y="120" dy="36" class="fee" fill="#fff">',
             feeToText(fee),
             "</text>"
         );
     }
 
-    function renderBottom(int24 lowerTick, int24 upperTick)
-        internal
-        pure
-        returns (string memory bottom)
-    {
+    function renderBottom(int24 lowerTick, int24 upperTick) internal pure returns (string memory bottom) {
         bottom = string.concat(
             '<rect x="30" y="342" width="240" height="24"/>',
             '<text x="39" y="360" class="tick" fill="#fff">Lower tick: ',
@@ -142,11 +123,7 @@ library NFTRenderer {
         );
     }
 
-    function feeToText(uint256 fee)
-        internal
-        pure
-        returns (string memory feeString)
-    {
+    function feeToText(uint256 fee) internal pure returns (string memory feeString) {
         if (fee == 500) {
             feeString = "0.05%";
         } else if (fee == 3000) {
@@ -154,16 +131,10 @@ library NFTRenderer {
         }
     }
 
-    function tickToText(int24 tick)
-        internal
-        pure
-        returns (string memory tickString)
-    {
+    function tickToText(int24 tick) internal pure returns (string memory tickString) {
         tickString = string.concat(
             tick < 0 ? "-" : "",
-            tick < 0
-                ? Strings.toString(uint256(uint24(-tick)))
-                : Strings.toString(uint256(uint24(tick)))
+            tick < 0 ? Strings.toString(uint256(uint24(-tick))) : Strings.toString(uint256(uint24(tick)))
         );
     }
 }

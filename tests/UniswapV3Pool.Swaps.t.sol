@@ -5,11 +5,11 @@ import "forge-std/Test.sol";
 import "./ERC20Mintable.sol";
 import "./UniswapV3Pool.Utils.t.sol";
 
-import "../src/interfaces/IUniswapV3Pool.sol";
-import "../src/lib/LiquidityMath.sol";
-import "../src/lib/TickMath.sol";
-import "../src/UniswapV3Factory.sol";
-import "../src/UniswapV3Pool.sol";
+import "../contracts/interfaces/IUniswapV3Pool.sol";
+import "../contracts/lib/LiquidityMath.sol";
+import "../contracts/lib/TickMath.sol";
+import "../contracts/UniswapV3Factory.sol";
+import "../contracts/UniswapV3Pool.sol";
 
 contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
     ERC20Mintable weth;
@@ -35,39 +35,25 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
     //  4545 -----|----- 5500
     //
     function testBuyETHOnePriceRange() public {
-        (
-            LiquidityRange[] memory liquidity,
-            uint256 poolBalance0,
-            uint256 poolBalance1
-        ) = setupPool(
-                PoolParams({
-                    balances: [uint256(1 ether), 5000 ether],
-                    currentPrice: 5000,
-                    liquidity: liquidityRanges(
-                        liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000)
-                    ),
-                    transferInMintCallback: true,
-                    transferInSwapCallback: true,
-                    mintLiqudity: true
-                })
-            );
+        (LiquidityRange[] memory liquidity, uint256 poolBalance0, uint256 poolBalance1) = setupPool(
+            PoolParams({
+                balances: [uint256(1 ether), 5000 ether],
+                currentPrice: 5000,
+                liquidity: liquidityRanges(liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000)),
+                transferInMintCallback: true,
+                transferInSwapCallback: true,
+                mintLiqudity: true
+            })
+        );
 
         uint256 swapAmount = 42 ether; // 42 USDC
         usdc.mint(address(this), swapAmount);
         usdc.approve(address(this), swapAmount);
 
-        (int256 userBalance0Before, int256 userBalance1Before) = (
-            int256(weth.balanceOf(address(this))),
-            int256(usdc.balanceOf(address(this)))
-        );
+        (int256 userBalance0Before, int256 userBalance1Before) =
+            (int256(weth.balanceOf(address(this))), int256(usdc.balanceOf(address(this))));
 
-        (int256 amount0Delta, int256 amount1Delta) = pool.swap(
-            address(this),
-            false,
-            swapAmount,
-            sqrtP(5004),
-            extra
-        );
+        (int256 amount0Delta, int256 amount1Delta) = pool.swap(address(this), false, swapAmount, sqrtP(5004), extra);
 
         assertEq(amount0Delta, -0.008371593947078467 ether, "invalid ETH out");
         assertEq(amount1Delta, 42 ether, "invalid USDC in");
@@ -84,14 +70,8 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
                     uint256(0),
                     27727650748765949686643356806934465 // 0.000081484242041869
                 ],
-                userBalances: [
-                    uint256(userBalance0Before - amount0Delta),
-                    uint256(userBalance1Before - amount1Delta)
-                ],
-                poolBalances: [
-                    uint256(int256(poolBalance0) + amount0Delta),
-                    uint256(int256(poolBalance1) + amount1Delta)
-                ],
+                userBalances: [uint256(userBalance0Before - amount0Delta), uint256(userBalance1Before - amount1Delta)],
+                poolBalances: [uint256(int256(poolBalance0) + amount0Delta), uint256(int256(poolBalance1) + amount1Delta)],
                 position: ExpectedPositionShort({
                     owner: address(this),
                     ticks: [liq.lowerTick, liq.upperTick],
@@ -100,12 +80,7 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
                     tokensOwed: [uint128(0), 0]
                 }),
                 ticks: rangeToTicks(liq),
-                observation: ExpectedObservationShort({
-                    index: 0,
-                    timestamp: 1,
-                    tickCumulative: 0,
-                    initialized: true
-                })
+                observation: ExpectedObservationShort({index: 0, timestamp: 1, tickCumulative: 0, initialized: true})
             })
         );
     }
@@ -117,44 +92,26 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
     //  4545 -----|----- 5500
     //
     function testBuyETHTwoEqualPriceRanges() public {
-        LiquidityRange memory range = liquidityRange(
-            4545,
-            5500,
-            1 ether,
-            5000 ether,
-            5000
+        LiquidityRange memory range = liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000);
+        (LiquidityRange[] memory liquidity, uint256 poolBalance0, uint256 poolBalance1) = setupPool(
+            PoolParams({
+                balances: [uint256(2 ether), 10000 ether],
+                currentPrice: 5000,
+                liquidity: liquidityRanges(range, range),
+                transferInMintCallback: true,
+                transferInSwapCallback: true,
+                mintLiqudity: true
+            })
         );
-        (
-            LiquidityRange[] memory liquidity,
-            uint256 poolBalance0,
-            uint256 poolBalance1
-        ) = setupPool(
-                PoolParams({
-                    balances: [uint256(2 ether), 10000 ether],
-                    currentPrice: 5000,
-                    liquidity: liquidityRanges(range, range),
-                    transferInMintCallback: true,
-                    transferInSwapCallback: true,
-                    mintLiqudity: true
-                })
-            );
 
         uint256 swapAmount = 42 ether; // 42 USDC
         usdc.mint(address(this), swapAmount);
         usdc.approve(address(this), swapAmount);
 
-        (int256 userBalance0Before, int256 userBalance1Before) = (
-            int256(weth.balanceOf(address(this))),
-            int256(usdc.balanceOf(address(this)))
-        );
+        (int256 userBalance0Before, int256 userBalance1Before) =
+            (int256(weth.balanceOf(address(this))), int256(usdc.balanceOf(address(this))));
 
-        (int256 amount0Delta, int256 amount1Delta) = pool.swap(
-            address(this),
-            false,
-            swapAmount,
-            sqrtP(5002),
-            extra
-        );
+        (int256 amount0Delta, int256 amount1Delta) = pool.swap(address(this), false, swapAmount, sqrtP(5002), extra);
 
         assertEq(amount0Delta, -0.008373196666644048 ether, "invalid ETH out");
         assertEq(amount1Delta, 42 ether, "invalid USDC in");
@@ -173,14 +130,8 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
                     uint256(0),
                     13863825374382974843321678403467232 // 0.000040742121020935
                 ],
-                userBalances: [
-                    uint256(userBalance0Before - amount0Delta),
-                    uint256(userBalance1Before - amount1Delta)
-                ],
-                poolBalances: [
-                    uint256(int256(poolBalance0) + amount0Delta),
-                    uint256(int256(poolBalance1) + amount1Delta)
-                ],
+                userBalances: [uint256(userBalance0Before - amount0Delta), uint256(userBalance1Before - amount1Delta)],
+                poolBalances: [uint256(int256(poolBalance0) + amount0Delta), uint256(int256(poolBalance1) + amount1Delta)],
                 position: ExpectedPositionShort({
                     owner: address(this),
                     ticks: [liq.lowerTick, liq.upperTick],
@@ -202,12 +153,7 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
                         liquidityNet: -int128(liqAmount)
                     })
                 ],
-                observation: ExpectedObservationShort({
-                    index: 0,
-                    timestamp: 1,
-                    tickCumulative: 0,
-                    initialized: true
-                })
+                observation: ExpectedObservationShort({index: 0, timestamp: 1, tickCumulative: 0, initialized: true})
             })
         );
     }
@@ -219,47 +165,31 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
     //             5500 ----------- 6250
     //
     function testBuyETHConsecutivePriceRanges() public {
-        (
-            LiquidityRange[] memory liquidity,
-            uint256 poolBalance0,
-            uint256 poolBalance1
-        ) = setupPool(
-                PoolParams({
-                    balances: [uint256(2 ether), 10000 ether],
-                    currentPrice: 5000,
-                    liquidity: liquidityRanges(
-                        liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000),
-                        liquidityRange(5500, 6250, 1 ether, 5000 ether, 5000)
+        (LiquidityRange[] memory liquidity, uint256 poolBalance0, uint256 poolBalance1) = setupPool(
+            PoolParams({
+                balances: [uint256(2 ether), 10000 ether],
+                currentPrice: 5000,
+                liquidity: liquidityRanges(
+                    liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000),
+                    liquidityRange(5500, 6250, 1 ether, 5000 ether, 5000)
                     ),
-                    transferInMintCallback: true,
-                    transferInSwapCallback: true,
-                    mintLiqudity: true
-                })
-            );
+                transferInMintCallback: true,
+                transferInSwapCallback: true,
+                mintLiqudity: true
+            })
+        );
 
         uint256 swapAmount = 10000 ether; // 10000 USDC
         usdc.mint(address(this), swapAmount);
         usdc.approve(address(this), swapAmount);
 
-        (int256 userBalance0Before, int256 userBalance1Before) = (
-            int256(weth.balanceOf(address(this))),
-            int256(usdc.balanceOf(address(this)))
-        );
+        (int256 userBalance0Before, int256 userBalance1Before) =
+            (int256(weth.balanceOf(address(this))), int256(usdc.balanceOf(address(this))));
 
-        (int256 amount0Delta, int256 amount1Delta) = pool.swap(
-            address(this),
-            false,
-            swapAmount,
-            sqrtP(6106),
-            extra
-        );
+        (int256 amount0Delta, int256 amount1Delta) = pool.swap(address(this), false, swapAmount, sqrtP(6106), extra);
 
         assertEq(amount0Delta, -1.806151062659754714 ether, "invalid ETH out");
-        assertEq(
-            amount1Delta,
-            9938.146841864722991247 ether,
-            "invalid USDC in"
-        );
+        assertEq(amount1Delta, 9938.146841864722991247 ether, "invalid USDC in");
 
         LiquidityRange memory liq1 = liquidity[0];
         LiquidityRange memory liq2 = liquidity[1];
@@ -275,14 +205,8 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
                     uint256(0),
                     7607942642143955456943817214090051843 // 0.022357733993050518
                 ],
-                userBalances: [
-                    uint256(userBalance0Before - amount0Delta),
-                    uint256(userBalance1Before - amount1Delta)
-                ],
-                poolBalances: [
-                    uint256(int256(poolBalance0) + amount0Delta),
-                    uint256(int256(poolBalance1) + amount1Delta)
-                ]
+                userBalances: [uint256(userBalance0Before - amount0Delta), uint256(userBalance1Before - amount1Delta)],
+                poolBalances: [uint256(int256(poolBalance0) + amount0Delta), uint256(int256(poolBalance1) + amount1Delta)]
             })
         );
 
@@ -341,13 +265,7 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         );
 
         assertObservation(
-            ExpectedObservation({
-                pool: pool,
-                index: 0,
-                timestamp: 1,
-                tickCumulative: 0,
-                initialized: true
-            })
+            ExpectedObservation({pool: pool, index: 0, timestamp: 1, tickCumulative: 0, initialized: true})
         );
     }
 
@@ -358,47 +276,31 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
     //      5000+1 ----------- 6250
     //
     function testBuyETHPartiallyOverlappingPriceRanges() public {
-        (
-            LiquidityRange[] memory liquidity,
-            uint256 poolBalance0,
-            uint256 poolBalance1
-        ) = setupPool(
-                PoolParams({
-                    balances: [uint256(2 ether), 10000 ether],
-                    currentPrice: 5000,
-                    liquidity: liquidityRanges(
-                        liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000),
-                        liquidityRange(5001, 6250, 1 ether, 5000 ether, 5000)
+        (LiquidityRange[] memory liquidity, uint256 poolBalance0, uint256 poolBalance1) = setupPool(
+            PoolParams({
+                balances: [uint256(2 ether), 10000 ether],
+                currentPrice: 5000,
+                liquidity: liquidityRanges(
+                    liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000),
+                    liquidityRange(5001, 6250, 1 ether, 5000 ether, 5000)
                     ),
-                    transferInMintCallback: true,
-                    transferInSwapCallback: true,
-                    mintLiqudity: true
-                })
-            );
+                transferInMintCallback: true,
+                transferInSwapCallback: true,
+                mintLiqudity: true
+            })
+        );
 
         uint256 swapAmount = 10000 ether; // 10000 USDC
         usdc.mint(address(this), swapAmount);
         usdc.approve(address(this), swapAmount);
 
-        (int256 userBalance0Before, int256 userBalance1Before) = (
-            int256(weth.balanceOf(address(this))),
-            int256(usdc.balanceOf(address(this)))
-        );
+        (int256 userBalance0Before, int256 userBalance1Before) =
+            (int256(weth.balanceOf(address(this))), int256(usdc.balanceOf(address(this))));
 
-        (int256 amount0Delta, int256 amount1Delta) = pool.swap(
-            address(this),
-            false,
-            swapAmount,
-            sqrtP(6056),
-            extra
-        );
+        (int256 amount0Delta, int256 amount1Delta) = pool.swap(address(this), false, swapAmount, sqrtP(6056), extra);
 
         assertEq(amount0Delta, -1.846400936777913632 ether, "invalid ETH out");
-        assertEq(
-            amount1Delta,
-            9932.742771767366603035 ether,
-            "invalid USDC in"
-        );
+        assertEq(amount1Delta, 9932.742771767366603035 ether, "invalid USDC in");
 
         LiquidityRange memory liq1 = liquidity[0];
         LiquidityRange memory liq2 = liquidity[1];
@@ -414,14 +316,8 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
                     uint256(0),
                     7279681885732197095096592710711050900 // 0.021393062331153838
                 ],
-                userBalances: [
-                    uint256(userBalance0Before - amount0Delta),
-                    uint256(userBalance1Before - amount1Delta)
-                ],
-                poolBalances: [
-                    uint256(int256(poolBalance0) + amount0Delta),
-                    uint256(int256(poolBalance1) + amount1Delta)
-                ]
+                userBalances: [uint256(userBalance0Before - amount0Delta), uint256(userBalance1Before - amount1Delta)],
+                poolBalances: [uint256(int256(poolBalance0) + amount0Delta), uint256(int256(poolBalance1) + amount1Delta)]
             })
         );
 
@@ -480,51 +376,31 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         );
 
         assertObservation(
-            ExpectedObservation({
-                pool: pool,
-                index: 0,
-                timestamp: 1,
-                tickCumulative: 0,
-                initialized: true
-            })
+            ExpectedObservation({pool: pool, index: 0, timestamp: 1, tickCumulative: 0, initialized: true})
         );
     }
 
     // Slippage protection doesn't cause a failure but interrupts early.
     function testBuyETHSlippageInterruption() public {
-        (
-            LiquidityRange[] memory liquidity,
-            uint256 poolBalance0,
-            uint256 poolBalance1
-        ) = setupPool(
-                PoolParams({
-                    balances: [uint256(1 ether), 5000 ether],
-                    currentPrice: 5000,
-                    liquidity: liquidityRanges(
-                        liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000)
-                    ),
-                    transferInMintCallback: true,
-                    transferInSwapCallback: true,
-                    mintLiqudity: true
-                })
-            );
+        (LiquidityRange[] memory liquidity, uint256 poolBalance0, uint256 poolBalance1) = setupPool(
+            PoolParams({
+                balances: [uint256(1 ether), 5000 ether],
+                currentPrice: 5000,
+                liquidity: liquidityRanges(liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000)),
+                transferInMintCallback: true,
+                transferInSwapCallback: true,
+                mintLiqudity: true
+            })
+        );
 
         uint256 swapAmount = 42 ether; // 42 USDC
         usdc.mint(address(this), swapAmount);
         usdc.approve(address(this), swapAmount);
 
-        (int256 userBalance0Before, int256 userBalance1Before) = (
-            int256(weth.balanceOf(address(this))),
-            int256(usdc.balanceOf(address(this)))
-        );
+        (int256 userBalance0Before, int256 userBalance1Before) =
+            (int256(weth.balanceOf(address(this))), int256(usdc.balanceOf(address(this))));
 
-        (int256 amount0Delta, int256 amount1Delta) = pool.swap(
-            address(this),
-            false,
-            swapAmount,
-            sqrtP(5003),
-            extra
-        );
+        (int256 amount0Delta, int256 amount1Delta) = pool.swap(address(this), false, swapAmount, sqrtP(5003), extra);
 
         assertEq(amount0Delta, -0.006557492291469845 ether, "invalid ETH out");
         assertEq(amount1Delta, 32.895984173313069971 ether, "invalid USDC in");
@@ -541,14 +417,8 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
                     uint256(0),
                     21717341909394213709358341211545367 // 0.000063821531823423
                 ],
-                userBalances: [
-                    uint256(userBalance0Before - amount0Delta),
-                    uint256(userBalance1Before - amount1Delta)
-                ],
-                poolBalances: [
-                    uint256(int256(poolBalance0) + amount0Delta),
-                    uint256(int256(poolBalance1) + amount1Delta)
-                ],
+                userBalances: [uint256(userBalance0Before - amount0Delta), uint256(userBalance1Before - amount1Delta)],
+                poolBalances: [uint256(int256(poolBalance0) + amount0Delta), uint256(int256(poolBalance1) + amount1Delta)],
                 position: ExpectedPositionShort({
                     owner: address(this),
                     ticks: [liq.lowerTick, liq.upperTick],
@@ -557,12 +427,7 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
                     tokensOwed: [uint128(0), 0]
                 }),
                 ticks: rangeToTicks(liq),
-                observation: ExpectedObservationShort({
-                    index: 0,
-                    timestamp: 1,
-                    tickCumulative: 0,
-                    initialized: true
-                })
+                observation: ExpectedObservationShort({index: 0, timestamp: 1, tickCumulative: 0, initialized: true})
             })
         );
     }
@@ -573,39 +438,25 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
     //  4545 -----|----- 5500
     //
     function testBuyUSDCOnePriceRange() public {
-        (
-            LiquidityRange[] memory liquidity,
-            uint256 poolBalance0,
-            uint256 poolBalance1
-        ) = setupPool(
-                PoolParams({
-                    balances: [uint256(1 ether), 5000 ether],
-                    currentPrice: 5000,
-                    liquidity: liquidityRanges(
-                        liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000)
-                    ),
-                    transferInMintCallback: true,
-                    transferInSwapCallback: true,
-                    mintLiqudity: true
-                })
-            );
+        (LiquidityRange[] memory liquidity, uint256 poolBalance0, uint256 poolBalance1) = setupPool(
+            PoolParams({
+                balances: [uint256(1 ether), 5000 ether],
+                currentPrice: 5000,
+                liquidity: liquidityRanges(liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000)),
+                transferInMintCallback: true,
+                transferInSwapCallback: true,
+                mintLiqudity: true
+            })
+        );
 
         uint256 swapAmount = 0.01337 ether;
         weth.mint(address(this), swapAmount);
         weth.approve(address(this), swapAmount);
 
-        (int256 userBalance0Before, int256 userBalance1Before) = (
-            int256(weth.balanceOf(address(this))),
-            int256(usdc.balanceOf(address(this)))
-        );
+        (int256 userBalance0Before, int256 userBalance1Before) =
+            (int256(weth.balanceOf(address(this))), int256(usdc.balanceOf(address(this))));
 
-        (int256 amount0Delta, int256 amount1Delta) = pool.swap(
-            address(this),
-            true,
-            swapAmount,
-            sqrtP(4993),
-            extra
-        );
+        (int256 amount0Delta, int256 amount1Delta) = pool.swap(address(this), true, swapAmount, sqrtP(4993), extra);
 
         assertEq(amount0Delta, 0.01337 ether, "invalid ETH out");
         assertEq(amount1Delta, -66.608848079558229697 ether, "invalid USDC in");
@@ -622,14 +473,8 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
                     uint256(8826635488357160650248135250207), // 0.000000025939150383
                     0
                 ],
-                userBalances: [
-                    uint256(userBalance0Before - amount0Delta),
-                    uint256(userBalance1Before - amount1Delta)
-                ],
-                poolBalances: [
-                    uint256(int256(poolBalance0) + amount0Delta),
-                    uint256(int256(poolBalance1) + amount1Delta)
-                ],
+                userBalances: [uint256(userBalance0Before - amount0Delta), uint256(userBalance1Before - amount1Delta)],
+                poolBalances: [uint256(int256(poolBalance0) + amount0Delta), uint256(int256(poolBalance1) + amount1Delta)],
                 position: ExpectedPositionShort({
                     owner: address(this),
                     ticks: [liq.lowerTick, liq.upperTick],
@@ -638,12 +483,7 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
                     tokensOwed: [uint128(0), 0]
                 }),
                 ticks: rangeToTicks(liq),
-                observation: ExpectedObservationShort({
-                    index: 0,
-                    timestamp: 1,
-                    tickCumulative: 0,
-                    initialized: true
-                })
+                observation: ExpectedObservationShort({index: 0, timestamp: 1, tickCumulative: 0, initialized: true})
             })
         );
     }
@@ -655,44 +495,26 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
     //  4545 -----|----- 5500
     //
     function testBuyUSDCTwoEqualPriceRanges() public {
-        LiquidityRange memory range = liquidityRange(
-            4545,
-            5500,
-            1 ether,
-            5000 ether,
-            5000
+        LiquidityRange memory range = liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000);
+        (LiquidityRange[] memory liquidity, uint256 poolBalance0, uint256 poolBalance1) = setupPool(
+            PoolParams({
+                balances: [uint256(2 ether), 10000 ether],
+                currentPrice: 5000,
+                liquidity: liquidityRanges(range, range),
+                transferInMintCallback: true,
+                transferInSwapCallback: true,
+                mintLiqudity: true
+            })
         );
-        (
-            LiquidityRange[] memory liquidity,
-            uint256 poolBalance0,
-            uint256 poolBalance1
-        ) = setupPool(
-                PoolParams({
-                    balances: [uint256(2 ether), 10000 ether],
-                    currentPrice: 5000,
-                    liquidity: liquidityRanges(range, range),
-                    transferInMintCallback: true,
-                    transferInSwapCallback: true,
-                    mintLiqudity: true
-                })
-            );
 
         uint256 swapAmount = 0.01337 ether;
         weth.mint(address(this), swapAmount);
         weth.approve(address(this), swapAmount);
 
-        (int256 userBalance0Before, int256 userBalance1Before) = (
-            int256(weth.balanceOf(address(this))),
-            int256(usdc.balanceOf(address(this)))
-        );
+        (int256 userBalance0Before, int256 userBalance1Before) =
+            (int256(weth.balanceOf(address(this))), int256(usdc.balanceOf(address(this))));
 
-        (int256 amount0Delta, int256 amount1Delta) = pool.swap(
-            address(this),
-            true,
-            swapAmount,
-            sqrtP(4996),
-            extra
-        );
+        (int256 amount0Delta, int256 amount1Delta) = pool.swap(address(this), true, swapAmount, sqrtP(4996), extra);
 
         assertEq(amount0Delta, 0.01337 ether, "invalid ETH out");
         assertEq(amount1Delta, -66.629142854363394712 ether, "invalid USDC in");
@@ -711,14 +533,8 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
                     uint256(4413317744178580325124067625103), // 0.000000012969575192
                     0
                 ],
-                userBalances: [
-                    uint256(userBalance0Before - amount0Delta),
-                    uint256(userBalance1Before - amount1Delta)
-                ],
-                poolBalances: [
-                    uint256(int256(poolBalance0) + amount0Delta),
-                    uint256(int256(poolBalance1) + amount1Delta)
-                ],
+                userBalances: [uint256(userBalance0Before - amount0Delta), uint256(userBalance1Before - amount1Delta)],
+                poolBalances: [uint256(int256(poolBalance0) + amount0Delta), uint256(int256(poolBalance1) + amount1Delta)],
                 position: ExpectedPositionShort({
                     owner: address(this),
                     ticks: [liq.lowerTick, liq.upperTick],
@@ -740,12 +556,7 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
                         liquidityNet: -int128(liqAmount)
                     })
                 ],
-                observation: ExpectedObservationShort({
-                    index: 0,
-                    timestamp: 1,
-                    tickCumulative: 0,
-                    initialized: true
-                })
+                observation: ExpectedObservationShort({index: 0, timestamp: 1, tickCumulative: 0, initialized: true})
             })
         );
     }
@@ -757,47 +568,31 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
     //  4000 ----------- 4545
     //
     function testBuyUSDCConsecutivePriceRanges() public {
-        (
-            LiquidityRange[] memory liquidity,
-            uint256 poolBalance0,
-            uint256 poolBalance1
-        ) = setupPool(
-                PoolParams({
-                    balances: [uint256(2 ether), 10000 ether],
-                    currentPrice: 5000,
-                    liquidity: liquidityRanges(
-                        liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000),
-                        liquidityRange(4000, 4545, 1 ether, 5000 ether, 5000)
+        (LiquidityRange[] memory liquidity, uint256 poolBalance0, uint256 poolBalance1) = setupPool(
+            PoolParams({
+                balances: [uint256(2 ether), 10000 ether],
+                currentPrice: 5000,
+                liquidity: liquidityRanges(
+                    liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000),
+                    liquidityRange(4000, 4545, 1 ether, 5000 ether, 5000)
                     ),
-                    transferInMintCallback: true,
-                    transferInSwapCallback: true,
-                    mintLiqudity: true
-                })
-            );
+                transferInMintCallback: true,
+                transferInSwapCallback: true,
+                mintLiqudity: true
+            })
+        );
 
         uint256 swapAmount = 2 ether;
         weth.mint(address(this), swapAmount);
         weth.approve(address(this), swapAmount);
 
-        (int256 userBalance0Before, int256 userBalance1Before) = (
-            int256(weth.balanceOf(address(this))),
-            int256(usdc.balanceOf(address(this)))
-        );
+        (int256 userBalance0Before, int256 userBalance1Before) =
+            (int256(weth.balanceOf(address(this))), int256(usdc.balanceOf(address(this))));
 
-        (int256 amount0Delta, int256 amount1Delta) = pool.swap(
-            address(this),
-            true,
-            swapAmount,
-            sqrtP(4094),
-            extra
-        );
+        (int256 amount0Delta, int256 amount1Delta) = pool.swap(address(this), true, swapAmount, sqrtP(4094), extra);
 
         assertEq(amount0Delta, 1.992510070712824953 ether, "invalid ETH out");
-        assertEq(
-            amount1Delta,
-            -9052.445703934334276104 ether,
-            "invalid USDC in"
-        );
+        assertEq(amount1Delta, -9052.445703934334276104 ether, "invalid USDC in");
 
         LiquidityRange memory liq1 = liquidity[0];
         LiquidityRange memory liq2 = liquidity[1];
@@ -813,14 +608,8 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
                     uint256(1522240169177611694234867497214043), // 0.000004473461798658
                     0
                 ],
-                userBalances: [
-                    uint256(userBalance0Before - amount0Delta),
-                    uint256(userBalance1Before - amount1Delta)
-                ],
-                poolBalances: [
-                    uint256(int256(poolBalance0) + amount0Delta),
-                    uint256(int256(poolBalance1) + amount1Delta)
-                ]
+                userBalances: [uint256(userBalance0Before - amount0Delta), uint256(userBalance1Before - amount1Delta)],
+                poolBalances: [uint256(int256(poolBalance0) + amount0Delta), uint256(int256(poolBalance1) + amount1Delta)]
             })
         );
 
@@ -879,13 +668,7 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         );
 
         assertObservation(
-            ExpectedObservation({
-                pool: pool,
-                index: 0,
-                timestamp: 1,
-                tickCumulative: 0,
-                initialized: true
-            })
+            ExpectedObservation({pool: pool, index: 0, timestamp: 1, tickCumulative: 0, initialized: true})
         );
     }
 
@@ -896,47 +679,31 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
     //  4000 ----------- 5000-1
     //
     function testBuyUSDCPartiallyOverlappingPriceRanges() public {
-        (
-            LiquidityRange[] memory liquidity,
-            uint256 poolBalance0,
-            uint256 poolBalance1
-        ) = setupPool(
-                PoolParams({
-                    balances: [uint256(2 ether), 10000 ether],
-                    currentPrice: 5000,
-                    liquidity: liquidityRanges(
-                        liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000),
-                        liquidityRange(4000, 4999, 1 ether, 5000 ether, 5000)
+        (LiquidityRange[] memory liquidity, uint256 poolBalance0, uint256 poolBalance1) = setupPool(
+            PoolParams({
+                balances: [uint256(2 ether), 10000 ether],
+                currentPrice: 5000,
+                liquidity: liquidityRanges(
+                    liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000),
+                    liquidityRange(4000, 4999, 1 ether, 5000 ether, 5000)
                     ),
-                    transferInMintCallback: true,
-                    transferInSwapCallback: true,
-                    mintLiqudity: true
-                })
-            );
+                transferInMintCallback: true,
+                transferInSwapCallback: true,
+                mintLiqudity: true
+            })
+        );
 
         uint256 swapAmount = 2 ether;
         weth.mint(address(this), swapAmount);
         weth.approve(address(this), swapAmount);
 
-        (int256 userBalance0Before, int256 userBalance1Before) = (
-            int256(weth.balanceOf(address(this))),
-            int256(usdc.balanceOf(address(this)))
-        );
+        (int256 userBalance0Before, int256 userBalance1Before) =
+            (int256(weth.balanceOf(address(this))), int256(usdc.balanceOf(address(this))));
 
-        (int256 amount0Delta, int256 amount1Delta) = pool.swap(
-            address(this),
-            true,
-            swapAmount,
-            sqrtP(4128),
-            extra
-        );
+        (int256 amount0Delta, int256 amount1Delta) = pool.swap(address(this), true, swapAmount, sqrtP(4128), extra);
 
         assertEq(amount0Delta, 1.996627649722534946 ether, "invalid ETH out");
-        assertEq(
-            amount1Delta,
-            -9282.886546310580739340 ether,
-            "invalid USDC in"
-        );
+        assertEq(amount1Delta, -9282.88654631058073934 ether, "invalid USDC in");
 
         LiquidityRange memory liq1 = liquidity[0];
         LiquidityRange memory liq2 = liquidity[1];
@@ -952,14 +719,8 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
                     uint256(1456201564392000426097400539712801), // 0.000004279391781503
                     0
                 ],
-                userBalances: [
-                    uint256(userBalance0Before - amount0Delta),
-                    uint256(userBalance1Before - amount1Delta)
-                ],
-                poolBalances: [
-                    uint256(int256(poolBalance0) + amount0Delta),
-                    uint256(int256(poolBalance1) + amount1Delta)
-                ]
+                userBalances: [uint256(userBalance0Before - amount0Delta), uint256(userBalance1Before - amount1Delta)],
+                poolBalances: [uint256(int256(poolBalance0) + amount0Delta), uint256(int256(poolBalance1) + amount1Delta)]
             })
         );
 
@@ -1018,51 +779,31 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         );
 
         assertObservation(
-            ExpectedObservation({
-                pool: pool,
-                index: 0,
-                timestamp: 1,
-                tickCumulative: 0,
-                initialized: true
-            })
+            ExpectedObservation({pool: pool, index: 0, timestamp: 1, tickCumulative: 0, initialized: true})
         );
     }
 
     // Slippage protection doesn't cause a failure but interrupts early.
     function testBuyUSDCSlippageInterruption() public {
-        (
-            LiquidityRange[] memory liquidity,
-            uint256 poolBalance0,
-            uint256 poolBalance1
-        ) = setupPool(
-                PoolParams({
-                    balances: [uint256(1 ether), 5000 ether],
-                    currentPrice: 5000,
-                    liquidity: liquidityRanges(
-                        liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000)
-                    ),
-                    transferInMintCallback: true,
-                    transferInSwapCallback: true,
-                    mintLiqudity: true
-                })
-            );
+        (LiquidityRange[] memory liquidity, uint256 poolBalance0, uint256 poolBalance1) = setupPool(
+            PoolParams({
+                balances: [uint256(1 ether), 5000 ether],
+                currentPrice: 5000,
+                liquidity: liquidityRanges(liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000)),
+                transferInMintCallback: true,
+                transferInSwapCallback: true,
+                mintLiqudity: true
+            })
+        );
 
         uint256 swapAmount = 0.01337 ether;
         weth.mint(address(this), swapAmount);
         weth.approve(address(this), swapAmount);
 
-        (int256 userBalance0Before, int256 userBalance1Before) = (
-            int256(weth.balanceOf(address(this))),
-            int256(usdc.balanceOf(address(this)))
-        );
+        (int256 userBalance0Before, int256 userBalance1Before) =
+            (int256(weth.balanceOf(address(this))), int256(usdc.balanceOf(address(this))));
 
-        (int256 amount0Delta, int256 amount1Delta) = pool.swap(
-            address(this),
-            true,
-            swapAmount,
-            sqrtP(4994),
-            extra
-        );
+        (int256 amount0Delta, int256 amount1Delta) = pool.swap(address(this), true, swapAmount, sqrtP(4994), extra);
 
         assertEq(amount0Delta, 0.013172223319600129 ether, "invalid ETH out");
         assertEq(amount1Delta, -65.624123301724744141 ether, "invalid USDC in");
@@ -1079,14 +820,8 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
                     uint256(8696066852157821093692702995967), // 0.000000025555443648
                     0
                 ],
-                userBalances: [
-                    uint256(userBalance0Before - amount0Delta),
-                    uint256(userBalance1Before - amount1Delta)
-                ],
-                poolBalances: [
-                    uint256(int256(poolBalance0) + amount0Delta),
-                    uint256(int256(poolBalance1) + amount1Delta)
-                ],
+                userBalances: [uint256(userBalance0Before - amount0Delta), uint256(userBalance1Before - amount1Delta)],
+                poolBalances: [uint256(int256(poolBalance0) + amount0Delta), uint256(int256(poolBalance1) + amount1Delta)],
                 position: ExpectedPositionShort({
                     owner: address(this),
                     ticks: [liq.lowerTick, liq.upperTick],
@@ -1095,12 +830,7 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
                     tokensOwed: [uint128(0), 0]
                 }),
                 ticks: rangeToTicks(liq),
-                observation: ExpectedObservationShort({
-                    index: 0,
-                    timestamp: 1,
-                    tickCumulative: 0,
-                    initialized: true
-                })
+                observation: ExpectedObservationShort({index: 0, timestamp: 1, tickCumulative: 0, initialized: true})
             })
         );
     }
@@ -1148,22 +878,16 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
     }
 
     function testSwapMixed() public {
-        (
-            LiquidityRange[] memory liquidity,
-            uint256 poolBalance0,
-            uint256 poolBalance1
-        ) = setupPool(
-                PoolParams({
-                    balances: [uint256(1 ether), 5000 ether],
-                    currentPrice: 5000,
-                    liquidity: liquidityRanges(
-                        liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000)
-                    ),
-                    transferInMintCallback: true,
-                    transferInSwapCallback: true,
-                    mintLiqudity: true
-                })
-            );
+        (LiquidityRange[] memory liquidity, uint256 poolBalance0, uint256 poolBalance1) = setupPool(
+            PoolParams({
+                balances: [uint256(1 ether), 5000 ether],
+                currentPrice: 5000,
+                liquidity: liquidityRanges(liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000)),
+                transferInMintCallback: true,
+                transferInSwapCallback: true,
+                mintLiqudity: true
+            })
+        );
 
         uint256 ethAmount = 0.01337 ether;
         weth.mint(address(this), ethAmount);
@@ -1178,22 +902,10 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         userBalances[1] = int256(usdc.balanceOf(address(this)));
 
         int256[] memory amountsDelta1 = new int256[](2);
-        (amountsDelta1[0], amountsDelta1[1]) = pool.swap(
-            address(this),
-            true,
-            ethAmount,
-            sqrtP(4993),
-            extra
-        );
+        (amountsDelta1[0], amountsDelta1[1]) = pool.swap(address(this), true, ethAmount, sqrtP(4993), extra);
 
         int256[] memory amountsDelta2 = new int256[](2);
-        (amountsDelta2[0], amountsDelta2[1]) = pool.swap(
-            address(this),
-            false,
-            usdcAmount,
-            sqrtP(5004),
-            extra
-        );
+        (amountsDelta2[0], amountsDelta2[1]) = pool.swap(address(this), false, usdcAmount, sqrtP(5004), extra);
 
         LiquidityRange memory liq = liquidity[0];
         assertMany(
@@ -1208,24 +920,12 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
                     36310018837669696018223443437652275 // 0.000106705555054829
                 ],
                 userBalances: [
-                    uint256(
-                        userBalances[0] - amountsDelta1[0] - amountsDelta2[0]
-                    ),
-                    uint256(
-                        userBalances[1] - amountsDelta1[1] - amountsDelta2[1]
-                    )
+                    uint256(userBalances[0] - amountsDelta1[0] - amountsDelta2[0]),
+                    uint256(userBalances[1] - amountsDelta1[1] - amountsDelta2[1])
                 ],
                 poolBalances: [
-                    uint256(
-                        int256(poolBalance0) +
-                            amountsDelta1[0] +
-                            amountsDelta2[0]
-                    ),
-                    uint256(
-                        int256(poolBalance1) +
-                            amountsDelta1[1] +
-                            amountsDelta2[1]
-                    )
+                    uint256(int256(poolBalance0) + amountsDelta1[0] + amountsDelta2[0]),
+                    uint256(int256(poolBalance1) + amountsDelta1[1] + amountsDelta2[1])
                 ],
                 position: ExpectedPositionShort({
                     owner: address(this),
@@ -1235,12 +935,7 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
                     tokensOwed: [uint128(0), 0]
                 }),
                 ticks: rangeToTicks(liq),
-                observation: ExpectedObservationShort({
-                    index: 0,
-                    timestamp: 1,
-                    tickCumulative: 0,
-                    initialized: true
-                })
+                observation: ExpectedObservationShort({index: 0, timestamp: 1, tickCumulative: 0, initialized: true})
             })
         );
     }
@@ -1267,9 +962,7 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
             PoolParams({
                 balances: [uint256(1 ether), 5000 ether],
                 currentPrice: 5000,
-                liquidity: liquidityRanges(
-                    liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000)
-                ),
+                liquidity: liquidityRanges(liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000)),
                 transferInMintCallback: true,
                 transferInSwapCallback: true,
                 mintLiqudity: true
@@ -1277,13 +970,7 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         );
 
         assertObservation(
-            ExpectedObservation({
-                pool: pool,
-                index: 0,
-                timestamp: 1,
-                tickCumulative: 0,
-                initialized: true
-            })
+            ExpectedObservation({pool: pool, index: 0, timestamp: 1, tickCumulative: 0, initialized: true})
         );
 
         uint256 swapAmount = 100 ether; // 100 USDC
@@ -1294,45 +981,27 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         weth.mint(address(this), swapAmount2 * 10);
         weth.approve(address(this), swapAmount2 * 10);
 
-        (, int24 tickBeforeSwap, , , ) = pool.slot0();
+        (, int24 tickBeforeSwap,,,) = pool.slot0();
         int56 tickCumulative = tickBeforeSwap * 0;
         pool.swap(address(this), false, swapAmount, sqrtP(6000), extra);
         assertObservation(
-            ExpectedObservation({
-                pool: pool,
-                index: 0,
-                timestamp: 1,
-                tickCumulative: tickCumulative,
-                initialized: true
-            })
+            ExpectedObservation({pool: pool, index: 0, timestamp: 1, tickCumulative: tickCumulative, initialized: true})
         );
 
         vm.warp(7);
-        (, tickBeforeSwap, , , ) = pool.slot0();
+        (, tickBeforeSwap,,,) = pool.slot0();
         tickCumulative += tickBeforeSwap * (7 - 1);
         pool.swap(address(this), true, swapAmount2, sqrtP(4000), extra);
         assertObservation(
-            ExpectedObservation({
-                pool: pool,
-                index: 0,
-                timestamp: 7,
-                tickCumulative: tickCumulative,
-                initialized: true
-            })
+            ExpectedObservation({pool: pool, index: 0, timestamp: 7, tickCumulative: tickCumulative, initialized: true})
         );
 
         vm.warp(20);
-        (, tickBeforeSwap, , , ) = pool.slot0();
+        (, tickBeforeSwap,,,) = pool.slot0();
         tickCumulative += tickBeforeSwap * (20 - 7);
         pool.swap(address(this), false, swapAmount, sqrtP(6000), extra);
         assertObservation(
-            ExpectedObservation({
-                pool: pool,
-                index: 0,
-                timestamp: 20,
-                tickCumulative: tickCumulative,
-                initialized: true
-            })
+            ExpectedObservation({pool: pool, index: 0, timestamp: 20, tickCumulative: tickCumulative, initialized: true})
         );
     }
 
@@ -1341,9 +1010,7 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
             PoolParams({
                 balances: [uint256(1 ether), 5000 ether],
                 currentPrice: 5000,
-                liquidity: liquidityRanges(
-                    liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000)
-                ),
+                liquidity: liquidityRanges(liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000)),
                 transferInMintCallback: true,
                 transferInSwapCallback: true,
                 mintLiqudity: true
@@ -1382,21 +1049,9 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         assertEq(tickCumulatives[2], 170370);
         assertEq(tickCumulatives[3], 85176);
 
-        assertEq(
-            uint32(uint56(tickCumulatives[0] - tickCumulatives[1])) /
-                (secondsAgos[1] - secondsAgos[0]),
-            84301
-        );
-        assertEq(
-            uint32(uint56(tickCumulatives[1] - tickCumulatives[2])) /
-                (secondsAgos[2] - secondsAgos[1]),
-            85194
-        );
-        assertEq(
-            uint32(uint56(tickCumulatives[2] - tickCumulatives[3])) /
-                (secondsAgos[3] - secondsAgos[2]),
-            85194
-        );
+        assertEq(uint32(uint56(tickCumulatives[0] - tickCumulatives[1])) / (secondsAgos[1] - secondsAgos[0]), 84301);
+        assertEq(uint32(uint56(tickCumulatives[1] - tickCumulatives[2])) / (secondsAgos[2] - secondsAgos[1]), 85194);
+        assertEq(uint32(uint56(tickCumulatives[2] - tickCumulatives[3])) / (secondsAgos[3] - secondsAgos[2]), 85194);
 
         secondsAgos = new uint32[](5);
         secondsAgos[0] = 0;
@@ -1412,26 +1067,10 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         assertEq(tickCumulatives[3], 340758);
         assertEq(tickCumulatives[4], 85176);
 
-        assertEq(
-            uint32(uint56(tickCumulatives[0] - tickCumulatives[1])) /
-                (secondsAgos[1] - secondsAgos[0]),
-            84301
-        );
-        assertEq(
-            uint32(uint56(tickCumulatives[1] - tickCumulatives[2])) /
-                (secondsAgos[2] - secondsAgos[1]),
-            84301
-        );
-        assertEq(
-            uint32(uint56(tickCumulatives[2] - tickCumulatives[3])) /
-                (secondsAgos[3] - secondsAgos[2]),
-            84658
-        );
-        assertEq(
-            uint32(uint56(tickCumulatives[3] - tickCumulatives[4])) /
-                (secondsAgos[4] - secondsAgos[3]),
-            85194
-        );
+        assertEq(uint32(uint56(tickCumulatives[0] - tickCumulatives[1])) / (secondsAgos[1] - secondsAgos[0]), 84301);
+        assertEq(uint32(uint56(tickCumulatives[1] - tickCumulatives[2])) / (secondsAgos[2] - secondsAgos[1]), 84301);
+        assertEq(uint32(uint56(tickCumulatives[2] - tickCumulatives[3])) / (secondsAgos[3] - secondsAgos[2]), 84658);
+        assertEq(uint32(uint56(tickCumulatives[3] - tickCumulatives[4])) / (secondsAgos[4] - secondsAgos[3]), 85194);
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -1439,56 +1078,26 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
     // CALLBACKS
     //
     ////////////////////////////////////////////////////////////////////////////
-    function uniswapV3SwapCallback(
-        int256 amount0,
-        int256 amount1,
-        bytes calldata data
-    ) public {
+    function uniswapV3SwapCallback(int256 amount0, int256 amount1, bytes calldata data) public {
         if (transferInSwapCallback) {
-            IUniswapV3Pool.CallbackData memory cbData = abi.decode(
-                data,
-                (IUniswapV3Pool.CallbackData)
-            );
+            IUniswapV3Pool.CallbackData memory cbData = abi.decode(data, (IUniswapV3Pool.CallbackData));
 
             if (amount0 > 0) {
-                IERC20(cbData.token0).transferFrom(
-                    cbData.payer,
-                    msg.sender,
-                    uint256(amount0)
-                );
+                IERC20(cbData.token0).transferFrom(cbData.payer, msg.sender, uint256(amount0));
             }
 
             if (amount1 > 0) {
-                IERC20(cbData.token1).transferFrom(
-                    cbData.payer,
-                    msg.sender,
-                    uint256(amount1)
-                );
+                IERC20(cbData.token1).transferFrom(cbData.payer, msg.sender, uint256(amount1));
             }
         }
     }
 
-    function uniswapV3MintCallback(
-        uint256 amount0,
-        uint256 amount1,
-        bytes calldata data
-    ) public {
+    function uniswapV3MintCallback(uint256 amount0, uint256 amount1, bytes calldata data) public {
         if (transferInMintCallback) {
-            IUniswapV3Pool.CallbackData memory cbData = abi.decode(
-                data,
-                (IUniswapV3Pool.CallbackData)
-            );
+            IUniswapV3Pool.CallbackData memory cbData = abi.decode(data, (IUniswapV3Pool.CallbackData));
 
-            IERC20(cbData.token0).transferFrom(
-                cbData.payer,
-                msg.sender,
-                amount0
-            );
-            IERC20(cbData.token1).transferFrom(
-                cbData.payer,
-                msg.sender,
-                amount1
-            );
+            IERC20(cbData.token0).transferFrom(cbData.payer, msg.sender, amount0);
+            IERC20(cbData.token1).transferFrom(cbData.payer, msg.sender, amount1);
         }
     }
 
@@ -1499,22 +1108,12 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
     ////////////////////////////////////////////////////////////////////////////
     function setupPool(PoolParams memory params)
         internal
-        returns (
-            LiquidityRange[] memory liquidity,
-            uint256 poolBalance0,
-            uint256 poolBalance1
-        )
+        returns (LiquidityRange[] memory liquidity, uint256 poolBalance0, uint256 poolBalance1)
     {
         weth.mint(address(this), params.balances[0]);
         usdc.mint(address(this), params.balances[1]);
 
-        pool = deployPool(
-            factory,
-            address(weth),
-            address(usdc),
-            3000,
-            params.currentPrice
-        );
+        pool = deployPool(factory, address(weth), address(usdc), 3000, params.currentPrice);
 
         if (params.mintLiqudity) {
             weth.approve(address(this), params.balances[0]);

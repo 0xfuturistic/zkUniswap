@@ -4,11 +4,11 @@ pragma solidity ^0.8.14;
 import "forge-std/Test.sol";
 import "abdk-math/ABDKMath64x64.sol";
 
-import "../src/interfaces/IUniswapV3Pool.sol";
-import "../src/interfaces/IUniswapV3Manager.sol";
-import "../src/lib/FixedPoint96.sol";
-import "../src/UniswapV3Factory.sol";
-import "../src/UniswapV3Pool.sol";
+import "../contracts/interfaces/IUniswapV3Pool.sol";
+import "../contracts/interfaces/IUniswapV3Manager.sol";
+import "../contracts/lib/FixedPoint96.sol";
+import "../contracts/UniswapV3Factory.sol";
+import "../contracts/UniswapV3Pool.sol";
 
 import "./ERC20Mintable.sol";
 import "./Assertions.sol";
@@ -21,29 +21,19 @@ abstract contract TestUtils is Test, Assertions {
         tickSpacings[3000] = 60;
     }
 
-    function divRound(int128 x, int128 y)
-        internal
-        pure
-        returns (int128 result)
-    {
+    function divRound(int128 x, int128 y) internal pure returns (int128 result) {
         int128 quot = ABDKMath64x64.div(x, y);
         result = quot >> 64;
 
         // Check if remainder is greater than 0.5
-        if (quot % 2**64 >= 0x8000000000000000) {
+        if (quot % 2 ** 64 >= 0x8000000000000000) {
             result += 1;
         }
     }
 
     // Implements: https://github.com/Uniswap/v3-sdk/blob/b6cd73a71f8f8ec6c40c130564d3aff12c38e693/src/utils/nearestUsableTick.ts
-    function nearestUsableTick(int24 tick_, uint24 tickSpacing)
-        internal
-        pure
-        returns (int24 result)
-    {
-        result =
-            int24(divRound(int128(tick_), int128(int24(tickSpacing)))) *
-            int24(tickSpacing);
+    function nearestUsableTick(int24 tick_, uint24 tickSpacing) internal pure returns (int24 result) {
+        result = int24(divRound(int128(tick_), int128(int24(tickSpacing)))) * int24(tickSpacing);
 
         if (result < TickMath.MIN_TICK) {
             result += int24(tickSpacing);
@@ -53,13 +43,7 @@ abstract contract TestUtils is Test, Assertions {
     }
 
     function sqrtP(uint256 price) internal pure returns (uint160) {
-        return
-            uint160(
-                int160(
-                    ABDKMath64x64.sqrt(int128(int256(price << 64))) <<
-                        (FixedPoint96.RESOLUTION - 64)
-                )
-            );
+        return uint160(int160(ABDKMath64x64.sqrt(int128(int256(price << 64))) << (FixedPoint96.RESOLUTION - 64)));
     }
 
     // Calculates sqrtP from price with tick spacing equal to 60;
@@ -82,48 +66,21 @@ abstract contract TestUtils is Test, Assertions {
         tick_ = nearestUsableTick(tick_, 60);
     }
 
-    function sqrtPToNearestTick(uint160 sqrtP_, uint24 tickSpacing)
-        internal
-        pure
-        returns (int24 tick_)
-    {
+    function sqrtPToNearestTick(uint160 sqrtP_, uint24 tickSpacing) internal pure returns (int24 tick_) {
         tick_ = TickMath.getTickAtSqrtRatio(sqrtP_);
         tick_ = nearestUsableTick(tick_, tickSpacing);
     }
 
-    function encodeError(string memory error)
-        internal
-        pure
-        returns (bytes memory encoded)
-    {
+    function encodeError(string memory error) internal pure returns (bytes memory encoded) {
         encoded = abi.encodeWithSignature(error);
     }
 
-    function encodeSlippageCheckFailed(uint256 amount0, uint256 amount1)
-        internal
-        pure
-        returns (bytes memory encoded)
-    {
-        encoded = abi.encodeWithSignature(
-            "SlippageCheckFailed(uint256,uint256)",
-            amount0,
-            amount1
-        );
+    function encodeSlippageCheckFailed(uint256 amount0, uint256 amount1) internal pure returns (bytes memory encoded) {
+        encoded = abi.encodeWithSignature("SlippageCheckFailed(uint256,uint256)", amount0, amount1);
     }
 
-    function encodeExtra(
-        address token0_,
-        address token1_,
-        address payer
-    ) internal pure returns (bytes memory) {
-        return
-            abi.encode(
-                IUniswapV3Pool.CallbackData({
-                    token0: token0_,
-                    token1: token1_,
-                    payer: payer
-                })
-            );
+    function encodeExtra(address token0_, address token1_, address payer) internal pure returns (bytes memory) {
+        return abi.encode(IUniswapV3Pool.CallbackData({token0: token0_, token1: token1_, payer: payer}));
     }
 
     function mintParams(
@@ -169,13 +126,10 @@ abstract contract TestUtils is Test, Assertions {
         });
     }
 
-    function deployPool(
-        UniswapV3Factory factory,
-        address token0,
-        address token1,
-        uint24 fee,
-        uint256 currentPrice
-    ) internal returns (UniswapV3Pool pool) {
+    function deployPool(UniswapV3Factory factory, address token0, address token1, uint24 fee, uint256 currentPrice)
+        internal
+        returns (UniswapV3Pool pool)
+    {
         pool = UniswapV3Pool(factory.createPool(token0, token1, fee));
         pool.initialize(sqrtP(currentPrice));
     }

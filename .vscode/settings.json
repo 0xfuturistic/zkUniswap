@@ -1,5 +1,5 @@
 {
-  "solidity.packageDefaultDependenciesContractsDirectory": "src",
+  "solidity.packageDefaultDependenciesContractsDirectory": "contracts",
   "solidity.packageDefaultDependenciesDirectory": "lib",
   "python.formatting.provider": "black",
   "solidity.defaultCompiler": "remote",

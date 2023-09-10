@@ -5,9 +5,9 @@ import "forge-std/Test.sol";
 import "./ERC20Mintable.sol";
 import "./TestUtils.sol";
 
-import "../src/interfaces/IUniswapV3Pool.sol";
-import "../src/UniswapV3Factory.sol";
-import "../src/UniswapV3Pool.sol";
+import "../contracts/interfaces/IUniswapV3Pool.sol";
+import "../contracts/UniswapV3Factory.sol";
+import "../contracts/UniswapV3Pool.sol";
 
 contract UniswapV3FactoryTest is Test, TestUtils {
     ERC20Mintable weth;
@@ -21,19 +21,11 @@ contract UniswapV3FactoryTest is Test, TestUtils {
     }
 
     function testCreatePool() public {
-        address poolAddress = factory.createPool(
-            address(weth),
-            address(usdc),
-            500
-        );
+        address poolAddress = factory.createPool(address(weth), address(usdc), 500);
 
         IUniswapV3Pool pool = IUniswapV3Pool(poolAddress);
 
-        assertEq(
-            factory.pools(address(usdc), address(weth), 500),
-            poolAddress,
-            "invalid pool address in the registry"
-        );
+        assertEq(factory.pools(address(usdc), address(weth), 500), poolAddress, "invalid pool address in the registry");
 
         assertEq(
             factory.pools(address(weth), address(usdc), 500),
@@ -58,11 +50,7 @@ contract UniswapV3FactoryTest is Test, TestUtils {
         assertEq(tick, 0, "invalid tick");
         assertEq(observationIndex, 0, "invalid observation index");
         assertEq(observationCardinality, 0, "invalid observation cardinality");
-        assertEq(
-            observationCardinalityNext,
-            0,
-            "invalid next observation cardinality"
-        );
+        assertEq(observationCardinalityNext, 0, "invalid next observation cardinality");
     }
 
     function testCreatePoolUnsupportedFee() public {
