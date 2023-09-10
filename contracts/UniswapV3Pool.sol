@@ -439,7 +439,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiLowLevelCallbackReceiver {
         emit Swap(msg.sender, recipient, amount0, amount1, slot0.sqrtPriceX96, state.liquidity, slot0.tick);
     }
 
-    function requestSwapCallback(
+    function requestSwap(
         address recipient,
         bool zeroForOne,
         uint256 amountSpecified,
@@ -490,11 +490,13 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiLowLevelCallbackReceiver {
                 this.bonsaiLowLevelCallbackReceiver.selector,
                 30000
             );
+            // todo: lock here
         }
     }
 
     function bonsaiLowLevelCallback(bytes calldata journal, bytes32 imageId) internal override returns (bytes memory) {
         require(imageId == swapImageId);
+
         (bytes memory inputs, uint160 sqrtPriceNextX96, uint256 amountIn, uint256 amountOut, uint256 feeAmount) =
             abi.decode(journal, (bytes, uint160, uint256, uint256, uint256));
 
