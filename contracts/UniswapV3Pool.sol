@@ -34,6 +34,7 @@ contract UniswapV3Pool is IUniswapV3Pool {
     error InvalidTickRange();
     error NotEnoughLiquidity();
     error ZeroLiquidity();
+    error InvalidJournal();
 
     event Burn(
         address indexed owner,
@@ -78,6 +79,8 @@ contract UniswapV3Pool is IUniswapV3Pool {
         uint128 liquidity,
         int24 tick
     );
+
+    bytes32 public swapImageId;
 
     // Pool parameters
     address public immutable factory;
@@ -384,6 +387,18 @@ contract UniswapV3Pool is IUniswapV3Pool {
             }
         }
 
+        (amount0, amount1) = _swap(recipient, zeroForOne, amountSpecified, data, state, slot0_, liquidity_);
+    }
+
+    function _swap(
+        address recipient,
+        bool zeroForOne,
+        uint256 amountSpecified,
+        bytes calldata data,
+        SwapState memory state,
+        Slot0 memory slot0_,
+        uint160 liquidity_
+    ) internal returns (int256 amount0, int256 amount1) {
         if (state.tick != slot0_.tick) {
             (uint16 observationIndex, uint16 observationCardinality) = observations.write(
                 slot0_.observationIndex,
@@ -430,6 +445,108 @@ contract UniswapV3Pool is IUniswapV3Pool {
         }
 
         emit Swap(msg.sender, recipient, amount0, amount1, slot0.sqrtPriceX96, state.liquidity, slot0.tick);
+
+        return (amount0, amount1);
+    }
+
+    function swap(
+        address recipient,
+        bool zeroForOne,
+        uint256 amountSpecified,
+        uint160 sqrtPriceLimitX96,
+        bytes calldata data,
+        bytes calldata journal,
+        bytes32 imageId
+    ) public returns (int256 amount0, int256 amount1) {
+        require(imageId == swapImageId);
+
+        // Caching for gas saving
+        Slot0 memory slot0_ = slot0;
+        uint128 liquidity_ = liquidity;
+
+        if (
+            zeroForOne
+                ? sqrtPriceLimitX96 > slot0_.sqrtPriceX96 || sqrtPriceLimitX96 < TickMath.MIN_SQRT_RATIO
+                : sqrtPriceLimitX96 < slot0_.sqrtPriceX96 || sqrtPriceLimitX96 > TickMath.MAX_SQRT_RATIO
+        ) revert InvalidPriceLimit();
+
+        SwapState memory state = SwapState({
+            amountSpecifiedRemaining: amountSpecified,
+            amountCalculated: 0,
+            sqrtPriceX96: slot0_.sqrtPriceX96,
+            tick: slot0_.tick,
+            feeGrowthGlobalX128: zeroForOne ? feeGrowthGlobal0X128 : feeGrowthGlobal1X128,
+            liquidity: liquidity_
+        });
+
+        while (state.amountSpecifiedRemaining > 0 && state.sqrtPriceX96 != sqrtPriceLimitX96) {
+            StepState memory step;
+
+            step.sqrtPriceStartX96 = state.sqrtPriceX96;
+
+            (step.nextTick,) = tickBitmap.nextInitializedTickWithinOneWord(state.tick, int24(tickSpacing), zeroForOne);
+
+            step.sqrtPriceNextX96 = TickMath.getSqrtRatioAtTick(step.nextTick);
+
+            (
+                uint160 sqrtPriceCurrentX96Journal,
+                uint160 sqrtPriceTargetX96Journal,
+                uint128 liquidityJournal,
+                uint256 amountRemainingJournal,
+                uint24 feeJournal,
+                uint160 sqrtPriceNextX96Journal,
+                uint256 amountInJournal,
+                uint256 amountOutJournal,
+                uint256 feeAmountJournal
+            ) = abi.decode(journal, (uint160, uint160, uint128, uint256, uint24, uint160, uint256, uint256, uint256));
+
+            // Validate inputs in journal
+            if (sqrtPriceCurrentX96Journal != state.sqrtPriceX96) revert InvalidJournal();
+            if (
+                sqrtPriceTargetX96Journal
+                    != (
+                        (zeroForOne ? step.sqrtPriceNextX96 < sqrtPriceLimitX96 : step.sqrtPriceNextX96 > sqrtPriceLimitX96)
+                            ? sqrtPriceLimitX96
+                            : step.sqrtPriceNextX96
+                    )
+            ) revert InvalidJournal();
+            if (liquidityJournal != state.liquidity) revert InvalidJournal();
+            if (amountRemainingJournal != state.amountSpecifiedRemaining) revert InvalidJournal();
+            if (feeJournal != fee) revert InvalidJournal();
+
+            // Write outputs in journal
+            state.sqrtPriceX96 = sqrtPriceNextX96Journal;
+            step.amountIn = amountInJournal;
+            step.amountOut = amountOutJournal;
+            step.feeAmount = feeAmountJournal;
+
+            state.amountSpecifiedRemaining -= step.amountIn + step.feeAmount;
+            state.amountCalculated += step.amountOut;
+
+            if (state.liquidity > 0) {
+                state.feeGrowthGlobalX128 += PRBMath.mulDiv(step.feeAmount, FixedPoint128.Q128, state.liquidity);
+            }
+
+            if (state.sqrtPriceX96 == step.sqrtPriceNextX96) {
+                int128 liquidityDelta = ticks.cross(
+                    step.nextTick,
+                    (zeroForOne ? state.feeGrowthGlobalX128 : feeGrowthGlobal0X128),
+                    (zeroForOne ? feeGrowthGlobal1X128 : state.feeGrowthGlobalX128)
+                );
+
+                if (zeroForOne) liquidityDelta = -liquidityDelta;
+
+                state.liquidity = LiquidityMath.addLiquidity(state.liquidity, liquidityDelta);
+
+                if (state.liquidity == 0) revert NotEnoughLiquidity();
+
+                state.tick = zeroForOne ? step.nextTick - 1 : step.nextTick;
+            } else if (state.sqrtPriceX96 != step.sqrtPriceStartX96) {
+                state.tick = TickMath.getTickAtSqrtRatio(state.sqrtPriceX96);
+            }
+        }
+
+        (amount0, amount1) = _swap(recipient, zeroForOne, amountSpecified, data, state, slot0_, liquidity_);
     }
 
     function flash(uint256 amount0, uint256 amount1, bytes calldata data) public {
