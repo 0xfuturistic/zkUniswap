@@ -138,9 +138,9 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiLowLevelCallbackReceiver {
     mapping(bytes32 => Position.Info) public positions;
     Oracle.Observation[65535] public observations;
 
-    constructor(IBonsaiRelay bonsaiRelay, bytes32 _swapImageId) BonsaiLowLevelCallbackReceiver(bonsaiRelay) {
+    constructor() BonsaiLowLevelCallbackReceiver(IBonsaiRelay(address(0))) {
         (factory, token0, token1, tickSpacing, fee) = IUniswapV3PoolDeployer(msg.sender).parameters();
-        swapImageId = _swapImageId;
+        swapImageId = bytes32(0);
     }
 
     function initialize(uint160 sqrtPriceX96) public {
