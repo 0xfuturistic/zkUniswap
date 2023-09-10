@@ -128,7 +128,17 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiLowLevelCallbackReceiver {
         uint256 feeAmount;
     }
 
+    struct SwapSession {
+        address recipient;
+        bool zeroForOne;
+        uint256 amountSpecified;
+        uint160 sqrtPriceLimitX96;
+        bytes data;
+    }
+
     Slot0 public slot0;
+
+    SwapSession public swapSession;
 
     // Amount of liquidity, L.
     uint128 public liquidity;
@@ -477,7 +487,6 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiLowLevelCallbackReceiver {
             bonsaiRelay.requestCallback(
                 swapImageId,
                 abi.encode(
-                    abi.encode(recipient, zeroForOne, amountSpecified, sqrtPriceLimitX96, data),
                     state.sqrtPriceX96,
                     (zeroForOne ? step.sqrtPriceNextX96 < sqrtPriceLimitX96 : step.sqrtPriceNextX96 > sqrtPriceLimitX96)
                         ? sqrtPriceLimitX96
@@ -491,17 +500,26 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiLowLevelCallbackReceiver {
                 30000
             );
             // todo: lock here
+
+            swapSession = SwapSession({
+                recipient: recipient,
+                zeroForOne: zeroForOne,
+                amountSpecified: amountSpecified,
+                sqrtPriceLimitX96: sqrtPriceLimitX96,
+                data: data
+            });
         }
     }
 
     function bonsaiLowLevelCallback(bytes calldata journal, bytes32 imageId) internal override returns (bytes memory) {
         require(imageId == swapImageId);
 
-        (bytes memory inputs, uint160 sqrtPriceNextX96, uint256 amountIn, uint256 amountOut, uint256 feeAmount) =
-            abi.decode(journal, (bytes, uint160, uint256, uint256, uint256));
-
-        (address recipient, bool zeroForOne, uint256 amountSpecified, uint160 sqrtPriceLimitX96, bytes memory data) =
-            abi.decode(inputs, (address, bool, uint256, uint160, bytes));
+        // Loading session data
+        address recipient = swapSession.recipient;
+        bool zeroForOne = swapSession.zeroForOne;
+        uint256 amountSpecified = swapSession.amountSpecified;
+        uint160 sqrtPriceLimitX96 = swapSession.sqrtPriceLimitX96;
+        bytes memory data = swapSession.data;
 
         // Caching for gas saving
         Slot0 memory slot0_ = slot0;
@@ -531,11 +549,9 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiLowLevelCallbackReceiver {
 
             step.sqrtPriceNextX96 = TickMath.getSqrtRatioAtTick(step.nextTick);
 
-            // write outputs from journal
-            state.sqrtPriceX96 = sqrtPriceNextX96;
-            step.amountIn = amountIn;
-            step.amountOut = amountOut;
-            step.feeAmount = feeAmount;
+            // Loading journal data
+            (state.sqrtPriceX96, step.amountIn, step.amountOut, step.feeAmount) =
+                abi.decode(journal, (uint160, uint256, uint256, uint256));
 
             state.amountSpecifiedRemaining -= step.amountIn + step.feeAmount;
             state.amountCalculated += step.amountOut;
