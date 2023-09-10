@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 480">
+  <style>
+    .tokens {
+      font: bold 30px sans-serif;
+    }
+
+    .fee {
+      font: normal 26px sans-serif;
+    }
+
+    .tick {
+      font: normal 18px sans-serif;
+    }
+  </style>
+
+  <rect width="300" height="480" fill="hsl(330,40%,40%)" />
+  <rect x="30" y="30" width="240" height="420" rx="15" ry="15" fill="hsl(330,90%,50%)" stroke="#000" />
+
+  <rect x="30" y="87" width="240" height="42" />
+  <text x="39" y="120" class="tokens" fill="#fff">
+    WETH/USDC
+  </text>
+
+  <rect x="30" y="132" width="240" height="30" />
+  <text x="39" y="120" dy="36" class="fee" fill="#fff">
+    0.05%
+  </text>
+
+  <rect x="30" y="342" width="240" height="24" />
+  <text x="39" y="360" class="tick" fill="#fff">
+    Lower tick: 123456
+  </text>
+
+  <rect x="30" y="372" width="240" height="24" />
+  <text x="39" y="360" dy="30" class="tick" fill="#fff">
+    Upper tick: 123456
+  </text>
+</svg>
