@@ -11,7 +11,17 @@
   },
   {
     "inputs": [],
+    "name": "FlashLoanNotPaid",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "InsufficientInputAmount",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidJournal",
     "type": "error"
   },
   {
@@ -43,6 +53,38 @@
       }
     ],
     "name": "PRBMath__MulDivOverflow",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "contract IBonsaiRelay",
+        "name": "expected",
+        "type": "address"
+      },
+      {
+        "internalType": "contract IBonsaiRelay",
+        "name": "found",
+        "type": "address"
+      }
+    ],
+    "name": "UnauthorizedCallbackSource",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "expected",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "found",
+        "type": "bytes32"
+      }
+    ],
+    "name": "UnexpectedImageId",
     "type": "error"
   },
   {
@@ -134,6 +176,31 @@
       }
     ],
     "name": "Collect",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "recipient",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount0",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount1",
+        "type": "uint256"
+      }
+    ],
+    "name": "Flash",
     "type": "event"
   },
   {
@@ -252,6 +319,19 @@
     ],
     "name": "Swap",
     "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "bonsaiRelay",
+    "outputs": [
+      {
+        "internalType": "contract IBonsaiRelay",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
   },
   {
     "inputs": [
@@ -381,6 +461,29 @@
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "amount0",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount1",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes",
+        "name": "data",
+        "type": "bytes"
+      }
+    ],
+    "name": "flash",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -555,6 +658,19 @@
   },
   {
     "inputs": [],
+    "name": "sessionData",
+    "outputs": [
+      {
+        "internalType": "bytes",
+        "name": "",
+        "type": "bytes"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "slot0",
     "outputs": [
       {
@@ -628,6 +744,58 @@
       }
     ],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "sqrt_p",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount_in",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount_out",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "fee_amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "swapCallback",
+    "outputs": [
+      {
+        "internalType": "int256",
+        "name": "amount0",
+        "type": "int256"
+      },
+      {
+        "internalType": "int256",
+        "name": "amount1",
+        "type": "int256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "swapImageId",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {
