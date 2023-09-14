@@ -16,7 +16,7 @@ use anyhow::Context;
 use bonsai_ethereum_relay::sdk::client::{CallbackRequest, Client};
 use clap::Parser;
 use ethers::{abi::ethabi, types::Address};
-use methods::FIBONACCI_ID;
+use methods::SWAP_ID;
 use risc0_zkvm::sha::Digest;
 
 /// Exmaple code for sending a REST API request to the Bonsai relay service to
@@ -62,7 +62,7 @@ async fn main() -> anyhow::Result<()> {
         // to get the value for your actual contract (9f2275c0: storeResult(uint256,uint256))
         function_selector: [0x9f, 0x22, 0x75, 0xc0],
         gas_limit: 3000000,
-        image_id: Digest::from(FIBONACCI_ID).into(),
+        image_id: Digest::from(SWAP_ID).into(),
         input,
     };
 
