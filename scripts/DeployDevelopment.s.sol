@@ -14,7 +14,13 @@ import "../contracts/UniswapV3Quoter.sol";
 import "../tests/ERC20Mintable.sol";
 import "../tests/TestUtils.sol";
 
-contract DeployDevelopment is Script, TestUtils {
+import {IBonsaiRelay} from "bonsai/IBonsaiRelay.sol";
+import {BonsaiCheats} from "bonsai/BonsaiCheats.sol";
+
+import {BonsaiDeploy} from "./BonsaiDeploy.sol";
+import {BonsaiStarter} from "../contracts/BonsaiStarter.sol";
+
+contract DeployDevelopment is Script, TestUtils, BonsaiCheats, BonsaiDeploy {
     struct TokenBalances {
         uint256 uni;
         uint256 usdc;
@@ -29,6 +35,12 @@ contract DeployDevelopment is Script, TestUtils {
     function run() public {
         // DEPLOYING STARGED
         vm.startBroadcast();
+
+        IBonsaiRelay bonsaiRelay = deployBonsaiRelay();
+        relay = address(bonsaiRelay);
+        uploadImages();
+
+        imageId = queryImageId("SWAP");
 
         ERC20Mintable weth = new ERC20Mintable("Wrapped Ether", "WETH", 18);
         ERC20Mintable usdc = new ERC20Mintable("USD Coin", "USDC", 18);
