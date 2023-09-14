@@ -21,7 +21,7 @@ contract UniswapV3FactoryTest is Test, TestUtils {
     }
 
     function testCreatePool() public {
-        address poolAddress = factory.createPool(address(weth), address(usdc), 500);
+        address poolAddress = factory.createPool(address(weth), address(usdc), 500, address(0), bytes32(0));
 
         IUniswapV3Pool pool = IUniswapV3Pool(poolAddress);
 
@@ -55,23 +55,23 @@ contract UniswapV3FactoryTest is Test, TestUtils {
 
     function testCreatePoolUnsupportedFee() public {
         vm.expectRevert(encodeError("UnsupportedFee()"));
-        factory.createPool(address(weth), address(usdc), 300);
+        factory.createPool(address(weth), address(usdc), 300, address(0), bytes32(0));
     }
 
     function testCreatePoolIdenticalTokens() public {
         vm.expectRevert(encodeError("TokensMustBeDifferent()"));
-        factory.createPool(address(weth), address(weth), 500);
+        factory.createPool(address(weth), address(weth), 500, address(0), bytes32(0));
     }
 
     function testCreateZeroTokenAddress() public {
         vm.expectRevert(encodeError("ZeroAddressNotAllowed()"));
-        factory.createPool(address(weth), address(0), 500);
+        factory.createPool(address(weth), address(0), 500, address(0), bytes32(0));
     }
 
     function testCreateAlreadyExists() public {
-        factory.createPool(address(weth), address(usdc), 500);
+        factory.createPool(address(weth), address(usdc), 500, address(0), bytes32(0));
 
         vm.expectRevert(encodeError("PoolAlreadyExists()"));
-        factory.createPool(address(weth), address(usdc), 500);
+        factory.createPool(address(weth), address(usdc), 500, address(0), bytes32(0));
     }
 }

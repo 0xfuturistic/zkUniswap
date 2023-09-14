@@ -23,7 +23,10 @@ contract UniswapV3Factory is IUniswapV3PoolDeployer {
         fees[3000] = 60;
     }
 
-    function createPool(address tokenX, address tokenY, uint24 fee) public returns (address pool) {
+    function createPool(address tokenX, address tokenY, uint24 fee, address relay, bytes32 imageId)
+        public
+        returns (address pool)
+    {
         if (tokenX == tokenY) revert TokensMustBeDifferent();
         if (fees[fee] == 0) revert UnsupportedFee();
 
@@ -34,8 +37,15 @@ contract UniswapV3Factory is IUniswapV3PoolDeployer {
             revert PoolAlreadyExists();
         }
 
-        parameters =
-            PoolParameters({factory: address(this), token0: tokenX, token1: tokenY, tickSpacing: fees[fee], fee: fee});
+        parameters = PoolParameters({
+            factory: address(this),
+            token0: tokenX,
+            token1: tokenY,
+            tickSpacing: fees[fee],
+            fee: fee,
+            relay: relay,
+            imageId: imageId
+        });
 
         pool = address(
             new UniswapV3Pool{

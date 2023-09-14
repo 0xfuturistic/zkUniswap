@@ -126,11 +126,16 @@ abstract contract TestUtils is Test, Assertions {
         });
     }
 
-    function deployPool(UniswapV3Factory factory, address token0, address token1, uint24 fee, uint256 currentPrice)
-        internal
-        returns (UniswapV3Pool pool)
-    {
-        pool = UniswapV3Pool(factory.createPool(token0, token1, fee));
+    function deployPool(
+        UniswapV3Factory factory,
+        address token0,
+        address token1,
+        uint24 fee,
+        uint256 currentPrice,
+        address relay,
+        bytes32 imageId
+    ) internal returns (UniswapV3Pool pool) {
+        pool = UniswapV3Pool(factory.createPool(token0, token1, fee, relay, imageId));
         pool.initialize(sqrtP(currentPrice));
     }
 }

@@ -294,7 +294,7 @@ contract UniswapV3ManagerTest is Test, TestUtils {
     }
 
     function testMintInvalidTickRangeLower() public {
-        pool = deployPool(factory, address(weth), address(usdc), 3000, 1);
+        pool = deployPool(factory, address(weth), address(usdc), 3000, 1, address(0), bytes32(0));
         manager = new UniswapV3Manager(address(factory));
 
         // Reverted in TickMath.getSqrtRatioAtTick
@@ -315,7 +315,7 @@ contract UniswapV3ManagerTest is Test, TestUtils {
     }
 
     function testMintInvalidTickRangeUpper() public {
-        pool = deployPool(factory, address(weth), address(usdc), 3000, 1);
+        pool = deployPool(factory, address(weth), address(usdc), 3000, 1, address(0), bytes32(0));
         manager = new UniswapV3Manager(address(factory));
 
         // Reverted in TickMath.getSqrtRatioAtTick
@@ -336,7 +336,7 @@ contract UniswapV3ManagerTest is Test, TestUtils {
     }
 
     function testMintZeroLiquidity() public {
-        pool = deployPool(factory, address(weth), address(usdc), 3000, 1);
+        pool = deployPool(factory, address(weth), address(usdc), 3000, 1, address(0), bytes32(0));
         manager = new UniswapV3Manager(address(factory));
 
         vm.expectRevert(encodeError("ZeroLiquidity()"));
@@ -374,7 +374,7 @@ contract UniswapV3ManagerTest is Test, TestUtils {
 
     function testMintSlippageProtection() public {
         (uint256 amount0, uint256 amount1) = (1 ether, 5000 ether);
-        pool = deployPool(factory, address(weth), address(usdc), 3000, 5000);
+        pool = deployPool(factory, address(weth), address(usdc), 3000, 5000, address(0), bytes32(0));
         manager = new UniswapV3Manager(address(factory));
 
         weth.mint(address(this), amount0);
@@ -958,7 +958,9 @@ contract UniswapV3ManagerTest is Test, TestUtils {
         params.token0.mint(address(this), params.token0Balance);
         params.token1.mint(address(this), params.token1Balance);
 
-        pool_ = deployPool(factory, address(params.token0), address(params.token1), 3000, params.currentPrice);
+        pool_ = deployPool(
+            factory, address(params.token0), address(params.token1), 3000, params.currentPrice, address(0), bytes32(0)
+        );
 
         if (params.mintLiquidity) {
             params.token0.approve(address(manager), params.token0Balance);

@@ -33,8 +33,8 @@ contract UniswapV3QuoterTest is Test, TestUtils {
         usdc.mint(address(this), usdcBalance);
         uni.mint(address(this), uniBalance);
 
-        wethUSDC = deployPool(factory, address(weth), address(usdc), 3000, 5000);
-        wethUNI = deployPool(factory, address(weth), address(uni), 3000, 10);
+        wethUSDC = deployPool(factory, address(weth), address(usdc), 3000, 5000, address(0), bytes32(0));
+        wethUNI = deployPool(factory, address(weth), address(uni), 3000, 10, address(0), bytes32(0));
 
         manager = new UniswapV3Manager(address(factory));
 

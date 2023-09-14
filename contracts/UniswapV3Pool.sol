@@ -82,6 +82,9 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         int24 tick
     );
 
+    /// @notice Address of the Bonsai relay contract.
+    address public relay;
+
     /// @notice Image ID of the only zkVM binary to accept callbacks from.
     bytes32 public immutable swapImageId;
 
@@ -145,9 +148,9 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
     mapping(bytes32 => Position.Info) public positions;
     Oracle.Observation[65535] public observations;
 
-    constructor() BonsaiCallbackReceiver(IBonsaiRelay(address(0))) {
-        (factory, token0, token1, tickSpacing, fee) = IUniswapV3PoolDeployer(msg.sender).parameters();
-        swapImageId = bytes32(0);
+    constructor() BonsaiCallbackReceiver(IBonsaiRelay(relay)) {
+        (factory, token0, token1, tickSpacing, fee, relay, swapImageId) =
+            IUniswapV3PoolDeployer(msg.sender).parameters();
     }
 
     function initialize(uint160 sqrtPriceX96) public {
