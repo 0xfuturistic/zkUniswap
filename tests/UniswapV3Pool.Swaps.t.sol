@@ -1113,7 +1113,7 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         weth.mint(address(this), params.balances[0]);
         usdc.mint(address(this), params.balances[1]);
 
-        pool = deployPool(factory, address(weth), address(usdc), 3000, params.currentPrice, address(0), bytes32(0));
+        pool = deployPool(factory, address(weth), address(usdc), 3000, params.currentPrice);
 
         if (params.mintLiqudity) {
             weth.approve(address(this), params.balances[0]);

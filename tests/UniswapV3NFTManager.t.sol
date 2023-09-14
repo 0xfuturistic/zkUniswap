@@ -40,9 +40,9 @@ contract UniswapV3NFTManagerTest is Test, TestUtils {
 
         factory = new UniswapV3Factory();
         nft = new UniswapV3NFTManager(address(factory));
-        wethUSDC = deployPool(factory, address(weth), address(usdc), FEE, INIT_PRICE, address(0), bytes32(0));
-        usdcDAI = deployPool(factory, address(usdc), address(dai), STABLE_FEE, STABLE_PRICE, address(0), bytes32(0));
-        wethUNI = deployPool(factory, address(weth), address(uni), FEE, UNI_PRICE, address(0), bytes32(0));
+        wethUSDC = deployPool(factory, address(weth), address(usdc), FEE, INIT_PRICE);
+        usdcDAI = deployPool(factory, address(usdc), address(dai), STABLE_FEE, STABLE_PRICE);
+        wethUNI = deployPool(factory, address(weth), address(uni), FEE, UNI_PRICE);
 
         weth.mint(address(this), USER_WETH_BALANCE);
         usdc.mint(address(this), USER_USDC_BALANCE);
