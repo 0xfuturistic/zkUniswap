@@ -36,12 +36,6 @@ contract DeployDevelopment is Script, TestUtils, BonsaiCheats, BonsaiDeploy {
         // DEPLOYING STARGED
         vm.startBroadcast();
 
-        IBonsaiRelay bonsaiRelay = deployBonsaiRelay();
-        relay = address(bonsaiRelay);
-        uploadImages();
-
-        imageId = queryImageId("SWAP");
-
         ERC20Mintable weth = new ERC20Mintable("Wrapped Ether", "WETH", 18);
         ERC20Mintable usdc = new ERC20Mintable("USD Coin", "USDC", 18);
         ERC20Mintable uni = new ERC20Mintable("Uniswap Coin", "UNI", 18);
@@ -51,6 +45,12 @@ contract DeployDevelopment is Script, TestUtils, BonsaiCheats, BonsaiDeploy {
         UniswapV3Factory factory = new UniswapV3Factory();
         UniswapV3Manager manager = new UniswapV3Manager(address(factory));
         UniswapV3Quoter quoter = new UniswapV3Quoter(address(factory));
+
+        IBonsaiRelay bonsaiRelay = deployBonsaiRelay();
+        relay = address(bonsaiRelay);
+        uploadImages();
+
+        imageId = queryImageId("SWAP");
 
         UniswapV3Pool wethUsdc = deployPool(factory, address(weth), address(usdc), 3000, 5000);
 
