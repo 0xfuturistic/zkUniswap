@@ -89,6 +89,9 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
     /// @dev Should be set to the maximum amount of gas your callback might reasonably consume.
     uint64 private constant BONSAI_CALLBACK_GAS_LIMIT = 100000;
 
+    /// @notice Session data for the callback from Bonsai.
+    bytes public sessionData;
+
     // Pool parameters
     address public immutable factory;
     address public immutable token0;
@@ -133,8 +136,6 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
     }
 
     Slot0 public slot0;
-
-    bytes public sessionData;
 
     // Amount of liquidity, L.
     uint128 public liquidity;
@@ -326,6 +327,10 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         emit Collect(msg.sender, recipient, lowerTick, upperTick, amount0, amount1);
     }
 
+    /// @notice Sends a request to Bonsai to have have the swap step calculated.
+    /// @dev This function sends the request to Bonsai through the on-chain relay.
+    ///      The request will trigger Bonsai to run the specified RISC Zero guest program with
+    ///      the given input and asynchronously return the verified results via the callback below.
     function swap(
         address recipient,
         bool zeroForOne,
@@ -333,8 +338,6 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         uint160 sqrtPriceLimitX96,
         bytes calldata data
     ) public returns (int256 amount0, int256 amount1) {
-        sessionData = abi.encode(recipient, zeroForOne, amountSpecified, sqrtPriceLimitX96, data);
-
         bonsaiRelay.requestCallback(
             swapImageId,
             abi.encode(
@@ -349,9 +352,14 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
             BONSAI_CALLBACK_GAS_LIMIT
         );
 
+        // place lock on the session data
+        sessionData = abi.encode(recipient, zeroForOne, amountSpecified, sqrtPriceLimitX96, data);
+
+        // return dummy values for now
         return (0, 0);
     }
 
+    /// @notice Callback function logic for processing verified journals from Bonsai.
     function swapCallback(uint256 sqrt_p, uint256 amount_in, uint256 amount_out, uint256 fee_amount)
         external
         onlyBonsaiCallback(swapImageId)
