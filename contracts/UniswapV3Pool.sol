@@ -82,7 +82,12 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         int24 tick
     );
 
-    bytes32 public swapImageId;
+    /// @notice Image ID of the only zkVM binary to accept callbacks from.
+    bytes32 public immutable swapImageId;
+
+    /// @notice Gas limit set on the callback from Bonsai.
+    /// @dev Should be set to the maximum amount of gas your callback might reasonably consume.
+    uint64 private constant BONSAI_CALLBACK_GAS_LIMIT = 100000;
 
     // Pool parameters
     address public immutable factory;
@@ -327,10 +332,28 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         uint256 amountSpecified,
         uint160 sqrtPriceLimitX96,
         bytes calldata data
-    ) public returns (int256 amount0, int256 amount1) {}
+    ) public returns (int256 amount0, int256 amount1) {
+        sessionData = abi.encode(recipient, zeroForOne, amountSpecified, sqrtPriceLimitX96, data);
+
+        bonsaiRelay.requestCallback(
+            swapImageId,
+            abi.encode(
+                uint160(79228162514264337593543950336),
+                uint160(79623317895830914510639640423),
+                uint128(2000000000000000000),
+                uint256(1000000000000000000),
+                uint24(600)
+            ),
+            address(this),
+            this.swapCallback.selector,
+            BONSAI_CALLBACK_GAS_LIMIT
+        );
+
+        return (0, 0);
+    }
 
     function swapCallback(uint256 sqrt_p, uint256 amount_in, uint256 amount_out, uint256 fee_amount)
-        internal
+        external
         onlyBonsaiCallback(swapImageId)
         returns (int256 amount0, int256 amount1)
     {
