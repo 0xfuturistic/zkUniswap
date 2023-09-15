@@ -15,6 +15,7 @@ import "./lib/LiquidityMath.sol";
 import "./lib/Math.sol";
 import "./lib/Oracle.sol";
 import "./lib/Position.sol";
+import "./lib/SwapMath.sol";
 import "./lib/Tick.sol";
 import "./lib/TickBitmap.sol";
 import "./lib/TickMath.sol";
@@ -332,11 +333,130 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         emit Collect(msg.sender, recipient, lowerTick, upperTick, amount0, amount1);
     }
 
+    function swap(
+        address recipient,
+        bool zeroForOne,
+        uint256 amountSpecified,
+        uint160 sqrtPriceLimitX96,
+        bytes calldata data
+    ) public returns (int256 amount0, int256 amount1) {
+        // Caching for gas saving
+        Slot0 memory slot0_ = slot0;
+        uint128 liquidity_ = liquidity;
+
+        if (
+            zeroForOne
+                ? sqrtPriceLimitX96 > slot0_.sqrtPriceX96 || sqrtPriceLimitX96 < TickMath.MIN_SQRT_RATIO
+                : sqrtPriceLimitX96 < slot0_.sqrtPriceX96 || sqrtPriceLimitX96 > TickMath.MAX_SQRT_RATIO
+        ) revert InvalidPriceLimit();
+
+        SwapState memory state = SwapState({
+            amountSpecifiedRemaining: amountSpecified,
+            amountCalculated: 0,
+            sqrtPriceX96: slot0_.sqrtPriceX96,
+            tick: slot0_.tick,
+            feeGrowthGlobalX128: zeroForOne ? feeGrowthGlobal0X128 : feeGrowthGlobal1X128,
+            liquidity: liquidity_
+        });
+
+        while (state.amountSpecifiedRemaining > 0 && state.sqrtPriceX96 != sqrtPriceLimitX96) {
+            StepState memory step;
+
+            step.sqrtPriceStartX96 = state.sqrtPriceX96;
+
+            (step.nextTick,) = tickBitmap.nextInitializedTickWithinOneWord(state.tick, int24(tickSpacing), zeroForOne);
+
+            step.sqrtPriceNextX96 = TickMath.getSqrtRatioAtTick(step.nextTick);
+
+            (state.sqrtPriceX96, step.amountIn, step.amountOut, step.feeAmount) = SwapMath.computeSwapStep(
+                state.sqrtPriceX96,
+                (zeroForOne ? step.sqrtPriceNextX96 < sqrtPriceLimitX96 : step.sqrtPriceNextX96 > sqrtPriceLimitX96)
+                    ? sqrtPriceLimitX96
+                    : step.sqrtPriceNextX96,
+                state.liquidity,
+                state.amountSpecifiedRemaining,
+                fee
+            );
+
+            state.amountSpecifiedRemaining -= step.amountIn + step.feeAmount;
+            state.amountCalculated += step.amountOut;
+
+            if (state.liquidity > 0) {
+                state.feeGrowthGlobalX128 += PRBMath.mulDiv(step.feeAmount, FixedPoint128.Q128, state.liquidity);
+            }
+
+            if (state.sqrtPriceX96 == step.sqrtPriceNextX96) {
+                int128 liquidityDelta = ticks.cross(
+                    step.nextTick,
+                    (zeroForOne ? state.feeGrowthGlobalX128 : feeGrowthGlobal0X128),
+                    (zeroForOne ? feeGrowthGlobal1X128 : state.feeGrowthGlobalX128)
+                );
+
+                if (zeroForOne) liquidityDelta = -liquidityDelta;
+
+                state.liquidity = LiquidityMath.addLiquidity(state.liquidity, liquidityDelta);
+
+                if (state.liquidity == 0) revert NotEnoughLiquidity();
+
+                state.tick = zeroForOne ? step.nextTick - 1 : step.nextTick;
+            } else if (state.sqrtPriceX96 != step.sqrtPriceStartX96) {
+                state.tick = TickMath.getTickAtSqrtRatio(state.sqrtPriceX96);
+            }
+        }
+
+        if (state.tick != slot0_.tick) {
+            (uint16 observationIndex, uint16 observationCardinality) = observations.write(
+                slot0_.observationIndex,
+                _blockTimestamp(),
+                slot0_.tick,
+                slot0_.observationCardinality,
+                slot0_.observationCardinalityNext
+            );
+
+            (slot0.sqrtPriceX96, slot0.tick, slot0.observationIndex, slot0.observationCardinality) =
+                (state.sqrtPriceX96, state.tick, observationIndex, observationCardinality);
+        } else {
+            slot0.sqrtPriceX96 = state.sqrtPriceX96;
+        }
+
+        if (liquidity_ != state.liquidity) liquidity = state.liquidity;
+
+        if (zeroForOne) {
+            feeGrowthGlobal0X128 = state.feeGrowthGlobalX128;
+        } else {
+            feeGrowthGlobal1X128 = state.feeGrowthGlobalX128;
+        }
+
+        (amount0, amount1) = zeroForOne
+            ? (int256(amountSpecified - state.amountSpecifiedRemaining), -int256(state.amountCalculated))
+            : (-int256(state.amountCalculated), int256(amountSpecified - state.amountSpecifiedRemaining));
+
+        if (zeroForOne) {
+            IERC20(token1).transfer(recipient, uint256(-amount1));
+
+            uint256 balance0Before = balance0();
+            IUniswapV3SwapCallback(msg.sender).uniswapV3SwapCallback(amount0, amount1, data);
+            if (balance0Before + uint256(amount0) > balance0()) {
+                revert InsufficientInputAmount();
+            }
+        } else {
+            IERC20(token0).transfer(recipient, uint256(-amount0));
+
+            uint256 balance1Before = balance1();
+            IUniswapV3SwapCallback(msg.sender).uniswapV3SwapCallback(amount0, amount1, data);
+            if (balance1Before + uint256(amount1) > balance1()) {
+                revert InsufficientInputAmount();
+            }
+        }
+
+        emit Swap(msg.sender, recipient, amount0, amount1, slot0.sqrtPriceX96, state.liquidity, slot0.tick);
+    }
+
     /// @notice Sends a request to Bonsai to have have the swap step calculated.
     /// @dev This function sends the request to Bonsai through the on-chain relay.
     ///      The request will trigger Bonsai to run the specified RISC Zero guest program with
     ///      the given input and asynchronously return the verified results via the callback below.
-    function swap(
+    function swapRequest(
         address recipient,
         bool zeroForOne,
         uint256 amountSpecified,
