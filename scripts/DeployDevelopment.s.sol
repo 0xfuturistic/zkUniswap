@@ -51,6 +51,7 @@ contract DeployDevelopment is Script, TestUtils, BonsaiCheats, BonsaiDeploy {
         uploadImages();
 
         imageId = queryImageId("SWAP");
+        console.log("Image ID for SWAP is ", vm.toString(imageId));
 
         UniswapV3Pool wethUsdc = deployPool(factory, address(weth), address(usdc), 3000, 5000);
 
