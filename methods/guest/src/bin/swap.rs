@@ -2,10 +2,7 @@
 
 use std::io::Read;
 
-use ethabi::{
-    ethereum_types::{Address, U256},
-    ParamType, Token,
-};
+use ethabi::{ethereum_types::U256, ParamType, Token};
 use risc0_zkvm::guest::env;
 use uniswap_v3_math::swap_math::compute_swap_step;
 
