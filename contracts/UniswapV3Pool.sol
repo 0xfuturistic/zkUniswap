@@ -20,7 +20,7 @@ import "./lib/TickBitmap.sol";
 import "./lib/TickMath.sol";
 
 import {IBonsaiRelay} from "bonsai/IBonsaiRelay.sol";
-import {BonsaiCallbackReceiver} from "bonsai/BonsaiCallbackReceiver.sol";
+import {BonsaiCallbackReceiver} from "./BonsaiCallbackReceiver.sol";
 
 contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
     using Oracle for Oracle.Observation[65535];
@@ -148,9 +148,11 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
     mapping(bytes32 => Position.Info) public positions;
     Oracle.Observation[65535] public observations;
 
-    constructor() BonsaiCallbackReceiver(IBonsaiRelay(relay)) {
+    constructor() {
         (factory, token0, token1, tickSpacing, fee, relay, swapImageId) =
             IUniswapV3PoolDeployer(msg.sender).parameters();
+
+        bonsaiRelay = IBonsaiRelay(relay);
     }
 
     function initialize(uint160 sqrtPriceX96) public {
