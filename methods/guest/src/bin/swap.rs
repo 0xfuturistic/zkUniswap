@@ -35,11 +35,6 @@ fn main() {
     let (sqrt_p, amount_in, amount_out, fee_amount) =
         compute_swap_step(price, price_target, liquidity, amount, fee).unwrap();
 
-    println!(
-        "hey! {} {} {} {}",
-        sqrt_p, amount_in, amount_out, fee_amount
-    );
-
     // Commit the journal that will be received by the application contract.
     // Encoded types should match the args expected by the application callback.
     env::commit_slice(&ethabi::encode(&[
