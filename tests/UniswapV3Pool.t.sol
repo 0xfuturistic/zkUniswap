@@ -28,6 +28,8 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
         usdc = new ERC20Mintable("USDC", "USDC", 18);
         weth = new ERC20Mintable("Ether", "ETH", 18);
         factory = new UniswapV3Factory();
+        relay = address(bonsaiRelay);
+        imageId = queryImageId("SWAP");
     }
 
     function testInitialize() public {
@@ -602,15 +604,27 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
     }
 
     function testMockCall() public {
-        // Deploy a new pool instance
-        pool = UniswapV3Pool(
-            factory.createPool(address(weth), address(usdc), 3000, address(bonsaiRelay), queryImageId("SWAP"))
+        setupPool(
+            PoolParams({
+                balances: [uint256(1 ether), 5000 ether],
+                currentPrice: 5000,
+                liquidity: liquidityRanges(liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000)),
+                transferInMintCallback: true,
+                transferInSwapCallback: true,
+                mintLiqudity: true
+            })
         );
+
+        uint256 swapAmount = 42 ether; // 42 USDC
+        usdc.mint(address(this), swapAmount);
+        usdc.approve(address(this), swapAmount);
 
         // Anticipate a callback request to the relay
         vm.expectCall(address(bonsaiRelay), abi.encodeWithSelector(IBonsaiRelay.requestCallback.selector));
         // Request the callback
-        pool.swapRequest(address(0), true, 0, 0, ""); // TODO: use dynamic values
+        pool.swapRequest(
+            address(this), false, swapAmount, sqrtP(5004), encodeExtra(address(weth), address(usdc), address(this))
+        );
 
         // Anticipate a callback invocation on the pool contract
         vm.expectCall(address(pool), abi.encodeWithSelector(UniswapV3Pool.swapCallback.selector));
