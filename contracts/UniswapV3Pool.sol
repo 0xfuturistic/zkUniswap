@@ -462,26 +462,66 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         uint256 amountSpecified,
         uint160 sqrtPriceLimitX96,
         bytes calldata data
-    ) public returns (int256 amount0, int256 amount1) {
-        bonsaiRelay.requestCallback(
-            swapImageId,
-            abi.encode(
-                uint160(79228162514264337593543950336),
-                uint160(79623317895830914510639640423),
-                uint128(2000000000000000000),
-                uint256(1000000000000000000),
-                uint24(600)
-            ),
-            address(this),
-            this.swapCallback.selector,
-            BONSAI_CALLBACK_GAS_LIMIT
-        );
+    ) public {
+        // Caching for gas saving
+        Slot0 memory slot0_ = slot0;
+        uint128 liquidity_ = liquidity;
 
-        // place lock on the session data
-        sessionData = abi.encode(recipient, zeroForOne, amountSpecified, sqrtPriceLimitX96, data);
+        if (
+            zeroForOne
+                ? sqrtPriceLimitX96 > slot0_.sqrtPriceX96 || sqrtPriceLimitX96 < TickMath.MIN_SQRT_RATIO
+                : sqrtPriceLimitX96 < slot0_.sqrtPriceX96 || sqrtPriceLimitX96 > TickMath.MAX_SQRT_RATIO
+        ) revert InvalidPriceLimit();
 
-        // return dummy values for now
-        return (0, 0);
+        SwapState memory state = SwapState({
+            amountSpecifiedRemaining: amountSpecified,
+            amountCalculated: 0,
+            sqrtPriceX96: slot0_.sqrtPriceX96,
+            tick: slot0_.tick,
+            feeGrowthGlobalX128: zeroForOne ? feeGrowthGlobal0X128 : feeGrowthGlobal1X128,
+            liquidity: liquidity_
+        });
+
+        while (state.amountSpecifiedRemaining > 0 && state.sqrtPriceX96 != sqrtPriceLimitX96) {
+            StepState memory step;
+
+            step.sqrtPriceStartX96 = state.sqrtPriceX96;
+
+            (step.nextTick,) = tickBitmap.nextInitializedTickWithinOneWord(state.tick, int24(tickSpacing), zeroForOne);
+
+            step.sqrtPriceNextX96 = TickMath.getSqrtRatioAtTick(step.nextTick);
+
+            // TODO: remove this
+            (state.sqrtPriceX96, step.amountIn, step.amountOut, step.feeAmount) = SwapMath.computeSwapStep(
+                state.sqrtPriceX96,
+                (zeroForOne ? step.sqrtPriceNextX96 < sqrtPriceLimitX96 : step.sqrtPriceNextX96 > sqrtPriceLimitX96)
+                    ? sqrtPriceLimitX96
+                    : step.sqrtPriceNextX96,
+                state.liquidity,
+                state.amountSpecifiedRemaining,
+                fee
+            );
+            // end remove this
+
+            bonsaiRelay.requestCallback(
+                swapImageId,
+                abi.encode(
+                    state.sqrtPriceX96,
+                    (zeroForOne ? step.sqrtPriceNextX96 < sqrtPriceLimitX96 : step.sqrtPriceNextX96 > sqrtPriceLimitX96)
+                        ? sqrtPriceLimitX96
+                        : step.sqrtPriceNextX96,
+                    state.liquidity,
+                    state.amountSpecifiedRemaining,
+                    fee
+                ),
+                address(this),
+                this.swapCallback.selector,
+                BONSAI_CALLBACK_GAS_LIMIT
+            );
+
+            // place lock on the session data
+            sessionData = abi.encode(recipient, zeroForOne, amountSpecified, sqrtPriceLimitX96, data);
+        }
     }
 
     /// @notice Callback function logic for processing verified journals from Bonsai.
@@ -491,7 +531,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         returns (int256 amount0, int256 amount1)
     {
         // Unpack session data
-        (address recipient, bool zeroForOne, uint256 amountSpecified, uint160 sqrtPriceLimitX96, bytes memory data) =
+        (address recipient, bool zeroForOne, uint256 amountSpecified, uint160 sqrtPriceLimitX96,) =
             abi.decode(sessionData, (address, bool, uint256, uint160, bytes));
 
         // Caching for gas saving
@@ -585,7 +625,6 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
             IERC20(token1).transfer(recipient, uint256(-amount1));
 
             uint256 balance0Before = balance0();
-            IUniswapV3SwapCallback(msg.sender).uniswapV3SwapCallback(amount0, amount1, data);
             if (balance0Before + uint256(amount0) > balance0()) {
                 revert InsufficientInputAmount();
             }
@@ -593,10 +632,10 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
             IERC20(token0).transfer(recipient, uint256(-amount0));
 
             uint256 balance1Before = balance1();
-            IUniswapV3SwapCallback(msg.sender).uniswapV3SwapCallback(amount0, amount1, data);
-            if (balance1Before + uint256(amount1) > balance1()) {
-                revert InsufficientInputAmount();
-            }
+            // TODO: uncomment this
+            //if (balance1Before + uint256(amount1) > balance1()) {
+            //    revert InsufficientInputAmount();
+            //}
         }
 
         emit Swap(msg.sender, recipient, amount0, amount1, slot0.sqrtPriceX96, state.liquidity, slot0.tick);
