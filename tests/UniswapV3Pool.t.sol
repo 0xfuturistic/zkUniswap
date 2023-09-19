@@ -11,7 +11,11 @@ import "../contracts/lib/TickMath.sol";
 import "../contracts/UniswapV3Factory.sol";
 import "../contracts/UniswapV3Pool.sol";
 
-contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
+import {BonsaiTest} from "bonsai/BonsaiTest.sol";
+import {IBonsaiRelay} from "bonsai/IBonsaiRelay.sol";
+import {BonsaiStarter} from "contracts/BonsaiStarter.sol";
+
+contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
     ERC20Mintable weth;
     ERC20Mintable usdc;
     UniswapV3Factory factory;
@@ -20,7 +24,7 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
     bool transferInMintCallback = true;
     bool flashCallbackCalled = false;
 
-    function setUp() public {
+    function setUp() public withRelay {
         usdc = new ERC20Mintable("USDC", "USDC", 18);
         weth = new ERC20Mintable("Ether", "ETH", 18);
         factory = new UniswapV3Factory();
@@ -595,6 +599,23 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
         pool.flash(0.1 ether, 1000 ether, abi.encodePacked(uint256(0.1 ether), uint256(1000 ether)));
 
         assertTrue(flashCallbackCalled, "flash callback wasn't called");
+    }
+
+    function testMockCall() public {
+        // Deploy a new pool instance
+        pool = UniswapV3Pool(
+            factory.createPool(address(weth), address(usdc), 3000, address(bonsaiRelay), queryImageId("SWAP"))
+        );
+
+        // Anticipate a callback request to the relay
+        vm.expectCall(address(bonsaiRelay), abi.encodeWithSelector(IBonsaiRelay.requestCallback.selector));
+        // Request the callback
+        pool.swapRequest(address(0), true, 0, 0, ""); // TODO: use dynamic values
+
+        // Anticipate a callback invocation on the pool contract
+        vm.expectCall(address(pool), abi.encodeWithSelector(UniswapV3Pool.swapCallback.selector));
+        // Relay the solution as a callback
+        runPendingCallbackRequest();
     }
 
     ////////////////////////////////////////////////////////////////////////////
