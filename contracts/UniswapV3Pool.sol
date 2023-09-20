@@ -465,63 +465,29 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
     ) public {
         // Caching for gas saving
         Slot0 memory slot0_ = slot0;
-        uint128 liquidity_ = liquidity;
 
-        if (
-            zeroForOne
-                ? sqrtPriceLimitX96 > slot0_.sqrtPriceX96 || sqrtPriceLimitX96 < TickMath.MIN_SQRT_RATIO
-                : sqrtPriceLimitX96 < slot0_.sqrtPriceX96 || sqrtPriceLimitX96 > TickMath.MAX_SQRT_RATIO
-        ) revert InvalidPriceLimit();
+        (int24 nextTick,) = tickBitmap.nextInitializedTickWithinOneWord(slot0_.tick, int24(tickSpacing), zeroForOne);
 
-        SwapState memory state = SwapState({
-            amountSpecifiedRemaining: amountSpecified,
-            amountCalculated: 0,
-            sqrtPriceX96: slot0_.sqrtPriceX96,
-            tick: slot0_.tick,
-            feeGrowthGlobalX128: zeroForOne ? feeGrowthGlobal0X128 : feeGrowthGlobal1X128,
-            liquidity: liquidity_
-        });
+        uint160 sqrtPriceNextX96 = TickMath.getSqrtRatioAtTick(nextTick);
 
-        while (state.amountSpecifiedRemaining > 0 && state.sqrtPriceX96 != sqrtPriceLimitX96) {
-            StepState memory step;
-
-            step.sqrtPriceStartX96 = state.sqrtPriceX96;
-
-            (step.nextTick,) = tickBitmap.nextInitializedTickWithinOneWord(state.tick, int24(tickSpacing), zeroForOne);
-
-            step.sqrtPriceNextX96 = TickMath.getSqrtRatioAtTick(step.nextTick);
-
-            // TODO: remove this
-            (state.sqrtPriceX96, step.amountIn, step.amountOut, step.feeAmount) = SwapMath.computeSwapStep(
-                state.sqrtPriceX96,
-                (zeroForOne ? step.sqrtPriceNextX96 < sqrtPriceLimitX96 : step.sqrtPriceNextX96 > sqrtPriceLimitX96)
+        bonsaiRelay.requestCallback(
+            swapImageId,
+            abi.encode(
+                slot0_.sqrtPriceX96,
+                (zeroForOne ? sqrtPriceNextX96 < sqrtPriceLimitX96 : sqrtPriceNextX96 > sqrtPriceLimitX96)
                     ? sqrtPriceLimitX96
-                    : step.sqrtPriceNextX96,
-                state.liquidity,
-                state.amountSpecifiedRemaining,
+                    : sqrtPriceNextX96,
+                liquidity,
+                amountSpecified,
                 fee
-            );
-            // end remove this
+            ),
+            address(this),
+            this.swapCallback.selector,
+            BONSAI_CALLBACK_GAS_LIMIT
+        );
 
-            bonsaiRelay.requestCallback(
-                swapImageId,
-                abi.encode(
-                    state.sqrtPriceX96,
-                    (zeroForOne ? step.sqrtPriceNextX96 < sqrtPriceLimitX96 : step.sqrtPriceNextX96 > sqrtPriceLimitX96)
-                        ? sqrtPriceLimitX96
-                        : step.sqrtPriceNextX96,
-                    state.liquidity,
-                    state.amountSpecifiedRemaining,
-                    fee
-                ),
-                address(this),
-                this.swapCallback.selector,
-                BONSAI_CALLBACK_GAS_LIMIT
-            );
-
-            // place lock on the session data
-            sessionData = abi.encode(recipient, zeroForOne, amountSpecified, sqrtPriceLimitX96, data);
-        }
+        // TODO: place lock on the session data
+        sessionData = abi.encode(recipient, zeroForOne, amountSpecified, sqrtPriceLimitX96, data);
     }
 
     /// @notice Callback function logic for processing verified journals from Bonsai.
