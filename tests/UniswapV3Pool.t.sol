@@ -28,8 +28,8 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
         usdc = new ERC20Mintable("USDC", "USDC", 18);
         weth = new ERC20Mintable("Ether", "ETH", 18);
         factory = new UniswapV3Factory();
-        relay = address(bonsaiRelay);
-        imageId = queryImageId("SWAP");
+        relayAddress = address(bonsaiRelay);
+        swapImageId = queryImageId("SWAP");
     }
 
     function testInitialize() public {

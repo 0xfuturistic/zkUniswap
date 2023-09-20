@@ -15,8 +15,8 @@ import "./Assertions.sol";
 
 abstract contract TestUtils is Test, Assertions {
     mapping(uint24 => uint24) internal tickSpacings;
-    address internal relay;
-    bytes32 internal imageId;
+    address internal relayAddress;
+    bytes32 internal swapImageId;
 
     constructor() {
         tickSpacings[500] = 10;
@@ -132,7 +132,7 @@ abstract contract TestUtils is Test, Assertions {
         internal
         returns (UniswapV3Pool pool)
     {
-        pool = UniswapV3Pool(factory.createPool(token0, token1, fee, relay, imageId));
+        pool = UniswapV3Pool(factory.createPool(token0, token1, fee, relayAddress, swapImageId));
         pool.initialize(sqrtP(currentPrice));
     }
 }
