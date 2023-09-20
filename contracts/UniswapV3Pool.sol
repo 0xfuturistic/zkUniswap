@@ -95,6 +95,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
 
     /// @notice Session data for the callback from Bonsai.
     bytes public sessionData;
+    address public sender;
 
     // Pool parameters
     address public immutable factory;
@@ -488,6 +489,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
 
         // TODO: place lock on the session data
         sessionData = abi.encode(recipient, zeroForOne, amountSpecified, sqrtPriceLimitX96, data);
+        sender = msg.sender;
     }
 
     /// @notice Callback function logic for processing verified journals from Bonsai.
@@ -497,7 +499,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         returns (int256 amount0, int256 amount1)
     {
         // Unpack session data
-        (address recipient, bool zeroForOne, uint256 amountSpecified, uint160 sqrtPriceLimitX96,) =
+        (address recipient, bool zeroForOne, uint256 amountSpecified, uint160 sqrtPriceLimitX96, bytes memory data) =
             abi.decode(sessionData, (address, bool, uint256, uint160, bytes));
 
         // Caching for gas saving
@@ -591,6 +593,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
             IERC20(token1).transfer(recipient, uint256(-amount1));
 
             uint256 balance0Before = balance0();
+            IUniswapV3SwapCallback(sender).uniswapV3SwapCallback(amount0, amount1, data);
             if (balance0Before + uint256(amount0) > balance0()) {
                 revert InsufficientInputAmount();
             }
@@ -598,13 +601,13 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
             IERC20(token0).transfer(recipient, uint256(-amount0));
 
             uint256 balance1Before = balance1();
-            // TODO: uncomment this
-            //if (balance1Before + uint256(amount1) > balance1()) {
-            //    revert InsufficientInputAmount();
-            //}
+            IUniswapV3SwapCallback(sender).uniswapV3SwapCallback(amount0, amount1, data);
+            if (balance1Before + uint256(amount1) > balance1()) {
+                revert InsufficientInputAmount();
+            }
         }
 
-        emit Swap(msg.sender, recipient, amount0, amount1, slot0.sqrtPriceX96, state.liquidity, slot0.tick);
+        emit Swap(sender, recipient, amount0, amount1, slot0.sqrtPriceX96, state.liquidity, slot0.tick);
     }
 
     function flash(uint256 amount0, uint256 amount1, bytes calldata data) public {
