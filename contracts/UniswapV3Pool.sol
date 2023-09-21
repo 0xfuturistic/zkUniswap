@@ -38,6 +38,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
     error NotEnoughLiquidity();
     error ZeroLiquidity();
     error InvalidJournal();
+    error LockedBy(address);
 
     event Burn(
         address indexed owner,
@@ -156,6 +157,12 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
     mapping(int16 => uint256) public tickBitmap;
     mapping(bytes32 => Position.Info) public positions;
     Oracle.Observation[65535] public observations;
+
+    modifier onlyByLocker() {
+        address locker = _getActiveLocker();
+        if (msg.sender != locker) revert LockedBy(locker);
+        _;
+    }
 
     constructor() {
         (factory, token0, token1, tickSpacing, fee, relay, swapImageId) =
@@ -674,5 +681,9 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
 
     function _blockTimestamp() internal view returns (uint32 timestamp) {
         timestamp = uint32(block.timestamp);
+    }
+
+    function _getActiveLocker() internal view returns (address locker) {
+        locker = address(this);
     }
 }
