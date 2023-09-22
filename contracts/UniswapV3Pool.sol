@@ -496,10 +496,13 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
     ///      The request will trigger Bonsai to run the specified RISC Zero guest program with
     ///      the given input and asynchronously return the verified results via the callback below.
     function activeLockMakeRequest() public returns (Lock memory lock) {
-        require(!(lock = _getActiveLock()).requested, "Already requested");
+        lock = locks[first];
+        require(!lock.requested, "Already requested");
 
-        locks[_getActiveLockIndex()].requested = true;
-        locks[_getActiveLockIndex()].timestamp = _blockTimestamp();
+        // Update lock
+        lock.requested = true;
+        lock.timestamp = _blockTimestamp();
+        locks[first] = lock;
 
         // Caching for gas saving
         Slot0 memory slot0_ = slot0;
@@ -537,11 +540,14 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         uint256 amount_out,
         uint256 fee_amount
     ) external onlyBonsaiCallback(swapImageId) returns (int256 amount0, int256 amount1, Lock memory lock) {
+        lock = locks[first];
         require(lockIndex == _getActiveLockIndex(), "Invalid lock index");
-        require(!(lock = _getActiveLock()).executed, "Already executed");
+        require(!lock.executed, "Already executed");
         require(!_hasLockTimedOut(lock), "Lock timed out");
 
-        locks[_getActiveLockIndex()].executed = true;
+        // Update lock
+        lock.executed = true;
+        locks[first] = lock;
 
         // Caching for gas saving
         Slot0 memory slot0_ = slot0;
@@ -655,13 +661,13 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
     function releaseActiveLock() public returns (Lock memory lock) {
         require(last >= first); // non-empty queue
 
-        lock = _getActiveLock();
+        lock = locks[first];
 
         if (!lock.executed && !_hasLockTimedOut(lock)) revert();
 
-        delete locks[_getActiveLockIndex()];
+        delete locks[first];
 
-        _increaseActiveLockIndex();
+        first += 1;
     }
 
     function flash(uint256 amount0, uint256 amount1, bytes calldata data) public {
