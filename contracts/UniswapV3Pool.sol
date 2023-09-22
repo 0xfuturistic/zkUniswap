@@ -525,7 +525,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         uint256 amount_out,
         uint256 fee_amount
     ) external onlyBonsaiCallback(swapImageId) returns (int256 amount0, int256 amount1) {
-        if (lock_version < _getLockVersion()) revert InvalidLockVersion();
+        if (!_isLockVersionValid(lock_version)) revert InvalidLockVersion();
 
         // Caching for gas saving
         Slot0 memory slot0_ = slot0;
@@ -692,19 +692,19 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         timestamp = uint32(block.timestamp);
     }
 
-    function _getActiveLocker() internal view returns (address locker) {
-        locker = address(this);
-    }
-
     function _getLockVersion() internal view returns (uint64 version) {
         version = lockVersion;
     }
 
     function _hasLockTimedOut(Session memory session_) internal view returns (bool timedOut) {
-        timedOut = block.timestamp - session_.timestamp > maxLockDuration;
+        timedOut = _blockTimestamp() - session_.timestamp > maxLockDuration;
     }
 
     function _alreadyLocked() internal view returns (bool locked) {
         locked = _getLockVersion() > 0 && !_hasLockTimedOut(session);
+    }
+
+    function _isLockVersionValid(uint64 lockVersion_) internal view returns (bool valid) {
+        valid = lockVersion_ >= _getLockVersion();
     }
 }
