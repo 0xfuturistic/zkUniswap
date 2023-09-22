@@ -663,7 +663,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
 
         lock = locks[first];
 
-        if (lock.requested && !lock.executed && !hasLockTimedOut(lock)) revert();
+        if (!lock.requested || !lock.executed && !hasLockTimedOut(lock)) revert();
 
         delete locks[first];
 
