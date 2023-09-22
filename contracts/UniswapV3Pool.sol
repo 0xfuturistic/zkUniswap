@@ -473,21 +473,21 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         uint160 sqrtPriceLimitX96,
         bytes calldata data,
         uint256 duration
-    ) public {
-        locks.push(
-            Lock({
-                recipient: recipient,
-                sender: msg.sender,
-                zeroForOne: zeroForOne,
-                amountSpecified: amountSpecified,
-                sqrtPriceLimitX96: sqrtPriceLimitX96,
-                data: data,
-                duration: duration,
-                timestamp: 0,
-                requested: false,
-                executed: false
-            })
-        );
+    ) public returns (Lock memory lock) {
+        lock = Lock({
+            recipient: recipient,
+            sender: msg.sender,
+            zeroForOne: zeroForOne,
+            amountSpecified: amountSpecified,
+            sqrtPriceLimitX96: sqrtPriceLimitX96,
+            data: data,
+            duration: duration,
+            timestamp: 0,
+            requested: false,
+            executed: false
+        });
+
+        locks.push(lock);
     }
 
     /// @notice Sends a request to Bonsai to have have the swap step calculated.
