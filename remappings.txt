@@ -7,3 +7,4 @@ prb-math/=lib/prb-math/contracts/
 abdk-math/=lib/abdk-libraries-solidity/
 bytes-utils/=lib/solidity-bytes-utils/contracts/
 solmate/=lib/solmate/src/
+VRGDAs/=lib/VRGDAs/src/
