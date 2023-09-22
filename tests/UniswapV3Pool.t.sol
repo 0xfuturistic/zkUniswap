@@ -619,17 +619,28 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
         usdc.mint(address(this), swapAmount);
         usdc.approve(address(this), swapAmount);
 
+        // Acquire lock
+        pool.acquireLock(
+            address(this),
+            false,
+            swapAmount,
+            sqrtP(5004),
+            encodeExtra(address(weth), address(usdc), address(this)),
+            2 minutes
+        );
+
         // Anticipate a callback request to the relay
         vm.expectCall(address(bonsaiRelay), abi.encodeWithSelector(IBonsaiRelay.requestCallback.selector));
         // Request the callback
-        pool.swapRequest(
-            address(this), false, swapAmount, sqrtP(5004), encodeExtra(address(weth), address(usdc), address(this))
-        );
+        pool.activeLockMakeRequest();
 
         // Anticipate a callback invocation on the pool contract
-        vm.expectCall(address(pool), abi.encodeWithSelector(UniswapV3Pool.swapCallback.selector));
+        vm.expectCall(address(pool), abi.encodeWithSelector(UniswapV3Pool.activeLockCallback.selector));
         // Relay the solution as a callback
         runPendingCallbackRequest();
+
+        // Release the lock
+        pool.releaseActiveLock();
     }
 
     ////////////////////////////////////////////////////////////////////////////

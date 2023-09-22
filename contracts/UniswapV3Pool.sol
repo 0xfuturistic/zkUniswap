@@ -38,8 +38,6 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
     error NotEnoughLiquidity();
     error ZeroLiquidity();
     error InvalidJournal();
-    error InvalidLockVersion();
-    error AlreadyLocked();
 
     event Burn(
         address indexed owner,
@@ -95,10 +93,6 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
     /// @dev Should be set to the maximum amount of gas your callback might reasonably consume.
     uint64 private constant BONSAI_CALLBACK_GAS_LIMIT = 100000;
 
-    uint64 public lockVersion;
-
-    uint64 public constant maxLockDuration = 1 minutes;
-
     // Pool parameters
     address public immutable factory;
     address public immutable token0;
@@ -142,17 +136,22 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         uint256 feeAmount;
     }
 
-    struct Session {
+    struct Lock {
         address recipient;
         address sender;
         bool zeroForOne;
         uint256 amountSpecified;
         uint160 sqrtPriceLimitX96;
         bytes data;
+        uint256 duration;
         uint256 timestamp;
+        bool requested;
+        bool executed;
     }
 
-    Session public session;
+    Lock[] public locks;
+
+    uint256 public activeLockIndex;
 
     Slot0 public slot0;
 
@@ -467,92 +466,108 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         emit Swap(msg.sender, recipient, amount0, amount1, slot0.sqrtPriceX96, state.liquidity, slot0.tick);
     }
 
-    /// @notice Sends a request to Bonsai to have have the swap step calculated.
-    /// @dev This function sends the request to Bonsai through the on-chain relay.
-    ///      The request will trigger Bonsai to run the specified RISC Zero guest program with
-    ///      the given input and asynchronously return the verified results via the callback below.
-    function swapRequest(
+    function acquireLock(
         address recipient,
         bool zeroForOne,
         uint256 amountSpecified,
         uint160 sqrtPriceLimitX96,
-        bytes calldata data
+        bytes calldata data,
+        uint256 duration
     ) public {
-        if (_alreadyLocked()) revert AlreadyLocked();
+        locks.push(
+            Lock({
+                recipient: recipient,
+                sender: msg.sender,
+                zeroForOne: zeroForOne,
+                amountSpecified: amountSpecified,
+                sqrtPriceLimitX96: sqrtPriceLimitX96,
+                data: data,
+                duration: duration,
+                timestamp: 0,
+                requested: false,
+                executed: false
+            })
+        );
+    }
 
-        lockVersion++;
+    /// @notice Sends a request to Bonsai to have have the swap step calculated.
+    /// @dev This function sends the request to Bonsai through the on-chain relay.
+    ///      The request will trigger Bonsai to run the specified RISC Zero guest program with
+    ///      the given input and asynchronously return the verified results via the callback below.
+    function activeLockMakeRequest() public returns (Lock memory lock) {
+        require(!(lock = _getActiveLock()).requested, "Already requested");
 
-        session = Session({
-            recipient: recipient,
-            sender: msg.sender,
-            zeroForOne: zeroForOne,
-            amountSpecified: amountSpecified,
-            sqrtPriceLimitX96: sqrtPriceLimitX96,
-            data: data,
-            timestamp: block.timestamp
-        });
+        lock.requested = true;
+        lock.timestamp = _blockTimestamp();
 
         // Caching for gas saving
         Slot0 memory slot0_ = slot0;
 
-        (int24 nextTick,) = tickBitmap.nextInitializedTickWithinOneWord(slot0_.tick, int24(tickSpacing), zeroForOne);
+        (int24 nextTick,) =
+            tickBitmap.nextInitializedTickWithinOneWord(slot0_.tick, int24(tickSpacing), lock.zeroForOne);
 
         uint160 sqrtPriceNextX96 = TickMath.getSqrtRatioAtTick(nextTick);
 
         bonsaiRelay.requestCallback(
             swapImageId,
             abi.encode(
-                lockVersion,
+                activeLockIndex,
                 slot0_.sqrtPriceX96,
-                (zeroForOne ? sqrtPriceNextX96 < sqrtPriceLimitX96 : sqrtPriceNextX96 > sqrtPriceLimitX96)
-                    ? sqrtPriceLimitX96
-                    : sqrtPriceNextX96,
+                (
+                    lock.zeroForOne
+                        ? sqrtPriceNextX96 < lock.sqrtPriceLimitX96
+                        : sqrtPriceNextX96 > lock.sqrtPriceLimitX96
+                ) ? lock.sqrtPriceLimitX96 : sqrtPriceNextX96,
                 liquidity,
-                amountSpecified,
+                lock.amountSpecified,
                 fee
             ),
             address(this),
-            this.swapCallback.selector,
+            this.activeLockCallback.selector,
             BONSAI_CALLBACK_GAS_LIMIT
         );
     }
 
     /// @notice Callback function logic for processing verified journals from Bonsai.
-    function swapCallback(
-        uint64 lock_version,
+    function activeLockCallback(
+        uint64 lockIndex,
         uint160 sqrt_p,
         uint256 amount_in,
         uint256 amount_out,
         uint256 fee_amount
-    ) external onlyBonsaiCallback(swapImageId) returns (int256 amount0, int256 amount1) {
-        if (!_isLockVersionValid(lock_version)) revert InvalidLockVersion();
+    ) external onlyBonsaiCallback(swapImageId) returns (int256 amount0, int256 amount1, Lock memory lock) {
+        require(lockIndex == activeLockIndex, "Invalid lock index");
+        require(!(lock = _getActiveLock()).executed, "Already executed");
+        require(!_hasLockTimedOut(lock), "Lock timed out");
+
+        lock.executed = true;
 
         // Caching for gas saving
         Slot0 memory slot0_ = slot0;
         uint128 liquidity_ = liquidity;
 
         if (
-            session.zeroForOne
-                ? session.sqrtPriceLimitX96 > slot0_.sqrtPriceX96 || session.sqrtPriceLimitX96 < TickMath.MIN_SQRT_RATIO
-                : session.sqrtPriceLimitX96 < slot0_.sqrtPriceX96 || session.sqrtPriceLimitX96 > TickMath.MAX_SQRT_RATIO
+            lock.zeroForOne
+                ? lock.sqrtPriceLimitX96 > slot0_.sqrtPriceX96 || lock.sqrtPriceLimitX96 < TickMath.MIN_SQRT_RATIO
+                : lock.sqrtPriceLimitX96 < slot0_.sqrtPriceX96 || lock.sqrtPriceLimitX96 > TickMath.MAX_SQRT_RATIO
         ) revert InvalidPriceLimit();
 
         SwapState memory state = SwapState({
-            amountSpecifiedRemaining: session.amountSpecified,
+            amountSpecifiedRemaining: lock.amountSpecified,
             amountCalculated: 0,
             sqrtPriceX96: slot0_.sqrtPriceX96,
             tick: slot0_.tick,
-            feeGrowthGlobalX128: session.zeroForOne ? feeGrowthGlobal0X128 : feeGrowthGlobal1X128,
+            feeGrowthGlobalX128: lock.zeroForOne ? feeGrowthGlobal0X128 : feeGrowthGlobal1X128,
             liquidity: liquidity_
         });
 
-        while (state.amountSpecifiedRemaining > 0 && state.sqrtPriceX96 != session.sqrtPriceLimitX96) {
+        while (state.amountSpecifiedRemaining > 0 && state.sqrtPriceX96 != lock.sqrtPriceLimitX96) {
             StepState memory step;
 
             step.sqrtPriceStartX96 = state.sqrtPriceX96;
 
             (step.nextTick,) =
-                tickBitmap.nextInitializedTickWithinOneWord(state.tick, int24(tickSpacing), session.zeroForOne);
+                tickBitmap.nextInitializedTickWithinOneWord(state.tick, int24(tickSpacing), lock.zeroForOne);
 
             step.sqrtPriceNextX96 = TickMath.getSqrtRatioAtTick(step.nextTick);
 
@@ -572,17 +587,17 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
             if (state.sqrtPriceX96 == step.sqrtPriceNextX96) {
                 int128 liquidityDelta = ticks.cross(
                     step.nextTick,
-                    (session.zeroForOne ? state.feeGrowthGlobalX128 : feeGrowthGlobal0X128),
-                    (session.zeroForOne ? feeGrowthGlobal1X128 : state.feeGrowthGlobalX128)
+                    (lock.zeroForOne ? state.feeGrowthGlobalX128 : feeGrowthGlobal0X128),
+                    (lock.zeroForOne ? feeGrowthGlobal1X128 : state.feeGrowthGlobalX128)
                 );
 
-                if (session.zeroForOne) liquidityDelta = -liquidityDelta;
+                if (lock.zeroForOne) liquidityDelta = -liquidityDelta;
 
                 state.liquidity = LiquidityMath.addLiquidity(state.liquidity, liquidityDelta);
 
                 if (state.liquidity == 0) revert NotEnoughLiquidity();
 
-                state.tick = session.zeroForOne ? step.nextTick - 1 : step.nextTick;
+                state.tick = lock.zeroForOne ? step.nextTick - 1 : step.nextTick;
             } else if (state.sqrtPriceX96 != step.sqrtPriceStartX96) {
                 state.tick = TickMath.getTickAtSqrtRatio(state.sqrtPriceX96);
             }
@@ -605,35 +620,41 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
 
         if (liquidity_ != state.liquidity) liquidity = state.liquidity;
 
-        if (session.zeroForOne) {
+        if (lock.zeroForOne) {
             feeGrowthGlobal0X128 = state.feeGrowthGlobalX128;
         } else {
             feeGrowthGlobal1X128 = state.feeGrowthGlobalX128;
         }
 
-        (amount0, amount1) = session.zeroForOne
-            ? (int256(session.amountSpecified - state.amountSpecifiedRemaining), -int256(state.amountCalculated))
-            : (-int256(state.amountCalculated), int256(session.amountSpecified - state.amountSpecifiedRemaining));
+        (amount0, amount1) = lock.zeroForOne
+            ? (int256(lock.amountSpecified - state.amountSpecifiedRemaining), -int256(state.amountCalculated))
+            : (-int256(state.amountCalculated), int256(lock.amountSpecified - state.amountSpecifiedRemaining));
 
-        if (session.zeroForOne) {
-            IERC20(token1).transfer(session.recipient, uint256(-amount1));
+        if (lock.zeroForOne) {
+            IERC20(token1).transfer(lock.recipient, uint256(-amount1));
 
             uint256 balance0Before = balance0();
-            IUniswapV3SwapCallback(session.sender).uniswapV3SwapCallback(amount0, amount1, session.data);
+            IUniswapV3SwapCallback(lock.sender).uniswapV3SwapCallback(amount0, amount1, lock.data);
             if (balance0Before + uint256(amount0) > balance0()) {
                 revert InsufficientInputAmount();
             }
         } else {
-            IERC20(token0).transfer(session.recipient, uint256(-amount0));
+            IERC20(token0).transfer(lock.recipient, uint256(-amount0));
 
             uint256 balance1Before = balance1();
-            IUniswapV3SwapCallback(session.sender).uniswapV3SwapCallback(amount0, amount1, session.data);
+            IUniswapV3SwapCallback(lock.sender).uniswapV3SwapCallback(amount0, amount1, lock.data);
             if (balance1Before + uint256(amount1) > balance1()) {
                 revert InsufficientInputAmount();
             }
         }
 
-        emit Swap(session.sender, session.recipient, amount0, amount1, slot0.sqrtPriceX96, state.liquidity, slot0.tick);
+        emit Swap(lock.sender, lock.recipient, amount0, amount1, slot0.sqrtPriceX96, state.liquidity, slot0.tick);
+
+        releaseActiveLock();
+    }
+
+    function releaseActiveLock() public returns (Lock memory lock) {
+        if ((lock = _getActiveLock()).executed || _hasLockTimedOut(lock)) activeLockIndex++;
     }
 
     function flash(uint256 amount0, uint256 amount1, bytes calldata data) public {
@@ -692,19 +713,11 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         timestamp = uint32(block.timestamp);
     }
 
-    function _getLockVersion() internal view returns (uint64 version) {
-        version = lockVersion;
+    function _getActiveLock() internal view returns (Lock memory lock) {
+        lock = locks[activeLockIndex];
     }
 
-    function _hasLockTimedOut(Session memory session_) internal view returns (bool timedOut) {
-        timedOut = _blockTimestamp() - session_.timestamp > maxLockDuration;
-    }
-
-    function _alreadyLocked() internal view returns (bool locked) {
-        locked = _getLockVersion() > 0 && !_hasLockTimedOut(session);
-    }
-
-    function _isLockVersionValid(uint64 lockVersion_) internal view returns (bool valid) {
-        valid = lockVersion_ >= _getLockVersion();
+    function _hasLockTimedOut(Lock memory lock) internal view returns (bool timedOut) {
+        timedOut = _blockTimestamp() - lock.timestamp > lock.duration;
     }
 }
