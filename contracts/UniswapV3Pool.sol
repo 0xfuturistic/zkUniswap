@@ -39,6 +39,11 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
     error ZeroLiquidity();
     error InvalidJournal();
     error EmptyLocks();
+    error CannotReleaseLock();
+    error InvalidLockIndex();
+    error LockTimedOut();
+    error LockAlreadyExecuted();
+    error LockAlreadyRequested();
 
     event Burn(
         address indexed owner,
@@ -503,7 +508,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
     ///      the given input and asynchronously return the verified results via the callback below.
     function activeLockMakeRequest() public NonEmptyLocks returns (Lock memory lock) {
         lock = locks[first];
-        require(!lock.requested, "Already requested");
+        if (lock.requested) revert LockAlreadyRequested();
 
         // Update lock
         lock.requested = true;
@@ -552,9 +557,9 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         returns (int256 amount0, int256 amount1, Lock memory lock)
     {
         lock = locks[first];
-        require(lockIndex == first, "Invalid lock index");
-        require(!lock.executed, "Already executed");
-        require(!hasLockTimedOut(lock), "Lock timed out");
+        if (lockIndex != first) revert InvalidLockIndex();
+        if (lock.executed) revert LockAlreadyExecuted();
+        if (hasLockTimedOut(lock)) revert LockTimedOut();
 
         // Update lock
         lock.executed = true;
@@ -672,7 +677,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
     function releaseActiveLock() public NonEmptyLocks returns (Lock memory lock) {
         lock = locks[first];
 
-        if (!lock.requested || !lock.executed && !hasLockTimedOut(lock)) revert();
+        if (!lock.requested || !lock.executed && !hasLockTimedOut(lock)) revert CannotReleaseLock();
 
         delete locks[first];
 
