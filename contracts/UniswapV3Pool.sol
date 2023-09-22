@@ -149,11 +149,13 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         uint256 amountSpecified;
         uint160 sqrtPriceLimitX96;
         bytes data;
-        uint256 duration;
-        uint256 timestamp;
+        uint32 duration;
+        uint32 timestamp;
         bool requested;
         bool executed;
     }
+
+    uint32 public LOCK_TIMEOUT = 1 minutes;
 
     mapping(uint256 => Lock) locks;
     uint256 first = 1;
@@ -495,7 +497,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
             amountSpecified: amountSpecified,
             sqrtPriceLimitX96: sqrtPriceLimitX96,
             data: data,
-            duration: duration,
+            duration: LOCK_TIMEOUT,
             timestamp: 0,
             requested: false,
             executed: false
