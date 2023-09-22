@@ -23,14 +23,13 @@ import "./lib/TickMath.sol";
 import {IBonsaiRelay} from "bonsai/IBonsaiRelay.sol";
 import {BonsaiCallbackReceiver} from "./BonsaiCallbackReceiver.sol";
 
-import {ERC721} from "solmate/tokens/ERC721.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
 import {toDaysWadUnsafe} from "solmate/utils/SignedWadMath.sol";
 
 import {LinearVRGDA} from "VRGDAs/LinearVRGDA.sol";
 
-contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
+contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
     using Oracle for Oracle.Observation[65535];
     using Position for Position.Info;
     using Position for mapping(bytes32 => Position.Info);
@@ -168,7 +167,9 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
     uint256 first = 1;
     uint256 last = 0;
 
-    uint256 public activeLockIndex;
+    uint256 public totalSold; // The total number of locks sold so far.
+
+    uint256 public immutable startTime = block.timestamp; // When VRGDA sales begun.
 
     Slot0 public slot0;
 
@@ -185,7 +186,13 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         _;
     }
 
-    constructor() {
+    constructor()
+        LinearVRGDA(
+            69.42e18, // Target price.
+            0.31e18, // Price decay percent.
+            2e18 // Per time unit.
+        )
+    {
         (factory, token0, token1, tickSpacing, fee, relay, swapImageId) =
             IUniswapV3PoolDeployer(msg.sender).parameters();
 
@@ -493,22 +500,33 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         bool zeroForOne,
         uint256 amountSpecified,
         uint160 sqrtPriceLimitX96,
-        bytes calldata data,
-        uint256 duration
-    ) public returns (Lock memory lock) {
-        last += 1;
-        locks[last] = lock = Lock({
-            recipient: recipient,
-            sender: msg.sender,
-            zeroForOne: zeroForOne,
-            amountSpecified: amountSpecified,
-            sqrtPriceLimitX96: sqrtPriceLimitX96,
-            data: data,
-            duration: LOCK_TIMEOUT,
-            timestamp: 0,
-            requested: false,
-            executed: false
-        });
+        bytes calldata data
+    ) public payable returns (Lock memory lock, uint256 mintedId) {
+        unchecked {
+            // Note: By using toDaysWadUnsafe(block.timestamp - startTime) we are establishing that 1 "unit of time" is 1 day.
+            uint256 price = getVRGDAPrice(toDaysWadUnsafe(block.timestamp - startTime), mintedId = totalSold++);
+
+            require(msg.value >= price, "UNDERPAID"); // Don't allow underpaying.
+
+            last += 1;
+            locks[last] = lock = Lock({
+                recipient: recipient,
+                sender: msg.sender,
+                zeroForOne: zeroForOne,
+                amountSpecified: amountSpecified,
+                sqrtPriceLimitX96: sqrtPriceLimitX96,
+                data: data,
+                duration: LOCK_TIMEOUT,
+                timestamp: 0,
+                requested: false,
+                executed: false
+            });
+
+            // Note: We do this at the end to avoid creating a reentrancy vector.
+            // Refund the user any ETH they spent over the current price of the NFT.
+            // Unchecked is safe here because we validate msg.value >= price above.
+            SafeTransferLib.safeTransferETH(msg.sender, msg.value - price);
+        }
     }
 
     /// @notice Sends a request to Bonsai to have have the swap step calculated.
