@@ -619,6 +619,14 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
         usdc.mint(address(this), swapAmount);
         usdc.approve(address(this), swapAmount);
 
+        // Check that we can't make a request yet
+        vm.expectRevert();
+        pool.activeLockMakeRequest();
+
+        // Check that we can't release any locks yet
+        vm.expectRevert();
+        pool.releaseActiveLock();
+
         // Acquire lock
         pool.acquireLock(
             address(this),
@@ -649,6 +657,10 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
         // Request the callback
         pool.activeLockMakeRequest();
 
+        // Check that we can't make another request
+        vm.expectRevert();
+        pool.activeLockMakeRequest();
+
         // Check that we still can't release the lock
         vm.expectRevert();
         pool.releaseActiveLock();
@@ -675,7 +687,7 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
         // Time warp to the lock expiration
         vm.warp(2 minutes);
 
-        // Check that the lock has timed out
+        // Check that the lock has timed out and we can release it
         pool.releaseActiveLock();
     }
 
