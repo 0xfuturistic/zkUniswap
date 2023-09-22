@@ -676,7 +676,7 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
         pool.releaseActiveLock();
 
         // Time warp to the lock expiration
-        vm.warp(pool.LOCK_TIMEOUT() + 100);
+        vm.warp(pool.LOCK_TIMEOUT() + 2);
 
         // Check that the lock has timed out and we can release it
         pool.releaseActiveLock();

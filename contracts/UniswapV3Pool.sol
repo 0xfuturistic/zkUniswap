@@ -523,7 +523,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
             });
 
             // Note: We do this at the end to avoid creating a reentrancy vector.
-            // Refund the user any ETH they spent over the current price of the NFT.
+            // Refund the user any ETH they spent over the current price of the lock.
             // Unchecked is safe here because we validate msg.value >= price above.
             SafeTransferLib.safeTransferETH(msg.sender, msg.value - price);
         }
