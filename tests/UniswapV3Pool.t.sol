@@ -620,7 +620,7 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
         usdc.approve(address(this), swapAmount);
 
         // Acquire lock
-        pool.acquireLock(
+        UniswapV3Pool.Lock memory lock = pool.acquireLock(
             address(this),
             false,
             swapAmount,
@@ -631,15 +631,21 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
 
         // Anticipate a callback request to the relay
         vm.expectCall(address(bonsaiRelay), abi.encodeWithSelector(IBonsaiRelay.requestCallback.selector));
+
         // Request the callback
-        pool.activeLockMakeRequest();
+        lock.requested = true;
+        lock.timestamp = block.timestamp;
+        assertEq(keccak256(abi.encode(pool.activeLockMakeRequest())), keccak256(abi.encode(lock)));
 
         // Anticipate a callback invocation on the pool contract
         vm.expectCall(address(pool), abi.encodeWithSelector(UniswapV3Pool.activeLockCallback.selector));
+
         // Relay the solution as a callback
         runPendingCallbackRequest();
 
         // Release the lock
+        lock.executed = true;
+        //assertEq(keccak256(abi.encode(pool.releaseActiveLock())), keccak256(abi.encode(lock)));
         pool.releaseActiveLock();
     }
 
