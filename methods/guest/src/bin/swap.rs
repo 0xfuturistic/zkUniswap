@@ -16,21 +16,23 @@ fn main() {
     // the application contract.
     let input = ethabi::decode_whole(
         &[
-            ParamType::Uint(160), // price
-            ParamType::Uint(160), // price_target
-            ParamType::Uint(128), // liquidity
-            ParamType::Uint(256), // amount
-            ParamType::Uint(24),  // fee
+            ParamType::FixedBytes(32), // sessionRoot
+            ParamType::Uint(160),      // price
+            ParamType::Uint(160),      // price_target
+            ParamType::Uint(128),      // liquidity
+            ParamType::Uint(256),      // amount
+            ParamType::Uint(24),       // fee
         ],
         &input_bytes,
     )
     .unwrap();
 
-    let price: U256 = input[0].clone().into_uint().unwrap();
-    let price_target: U256 = input[1].clone().into_uint().unwrap();
-    let liquidity: u128 = input[2].clone().into_uint().unwrap().as_u128();
-    let amount = ethers_core::types::I256::from_raw(input[3].clone().into_uint().unwrap());
-    let fee: u32 = input[4].clone().into_uint().unwrap().as_u32();
+    let session_root: ethabi::FixedBytes = input[0].clone().into_fixed_bytes().unwrap();
+    let price: U256 = input[1].clone().into_uint().unwrap();
+    let price_target: U256 = input[2].clone().into_uint().unwrap();
+    let liquidity: u128 = input[3].clone().into_uint().unwrap().as_u128();
+    let amount = ethers_core::types::I256::from_raw(input[4].clone().into_uint().unwrap());
+    let fee: u32 = input[5].clone().into_uint().unwrap().as_u32();
 
     let (sqrt_p, amount_in, amount_out, fee_amount) =
         compute_swap_step(price, price_target, liquidity, amount, fee).unwrap();
@@ -38,6 +40,7 @@ fn main() {
     // Commit the journal that will be received by the application contract.
     // Encoded types should match the args expected by the application callback.
     env::commit_slice(&ethabi::encode(&[
+        Token::FixedBytes(session_root),
         Token::Uint(sqrt_p),
         Token::Uint(amount_in),
         Token::Uint(amount_out),

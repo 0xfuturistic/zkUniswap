@@ -39,6 +39,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
     error ZeroLiquidity();
     error InvalidJournal();
     error LockedBy(address);
+    error InvalidSession();
 
     event Burn(
         address indexed owner,
@@ -485,9 +486,19 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
 
         uint160 sqrtPriceNextX96 = TickMath.getSqrtRatioAtTick(nextTick);
 
+        session = Session({
+            recipient: recipient,
+            sender: msg.sender,
+            zeroForOne: zeroForOne,
+            amountSpecified: amountSpecified,
+            sqrtPriceLimitX96: sqrtPriceLimitX96,
+            data: data
+        });
+
         bonsaiRelay.requestCallback(
             swapImageId,
             abi.encode(
+                keccak256(abi.encode(session)),
                 slot0_.sqrtPriceX96,
                 (zeroForOne ? sqrtPriceNextX96 < sqrtPriceLimitX96 : sqrtPriceNextX96 > sqrtPriceLimitX96)
                     ? sqrtPriceLimitX96
@@ -500,24 +511,18 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
             this.swapCallback.selector,
             BONSAI_CALLBACK_GAS_LIMIT
         );
-
-        // TODO: place lock on the session data
-        session = Session({
-            recipient: recipient,
-            sender: msg.sender,
-            zeroForOne: zeroForOne,
-            amountSpecified: amountSpecified,
-            sqrtPriceLimitX96: sqrtPriceLimitX96,
-            data: data
-        });
     }
 
     /// @notice Callback function logic for processing verified journals from Bonsai.
-    function swapCallback(uint160 sqrt_p, uint256 amount_in, uint256 amount_out, uint256 fee_amount)
-        external
-        onlyBonsaiCallback(swapImageId)
-        returns (int256 amount0, int256 amount1)
-    {
+    function swapCallback(
+        bytes32 session_root,
+        uint160 sqrt_p,
+        uint256 amount_in,
+        uint256 amount_out,
+        uint256 fee_amount
+    ) external onlyBonsaiCallback(swapImageId) returns (int256 amount0, int256 amount1) {
+        if (session_root != keccak256(abi.encode(session))) revert InvalidSession();
+
         // Caching for gas saving
         Slot0 memory slot0_ = slot0;
         uint128 liquidity_ = liquidity;
