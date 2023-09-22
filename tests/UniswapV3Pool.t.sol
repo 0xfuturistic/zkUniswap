@@ -620,7 +620,7 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
         usdc.approve(address(this), swapAmount);
 
         // Acquire lock
-        UniswapV3Pool.Lock memory lock = pool.acquireLock(
+        pool.acquireLock(
             address(this),
             false,
             swapAmount,
@@ -629,13 +629,29 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
             2 minutes
         );
 
+        // Acquire another lock
+        pool.acquireLock(
+            address(this),
+            false,
+            swapAmount,
+            sqrtP(5004),
+            encodeExtra(address(weth), address(usdc), address(this)),
+            1 minutes
+        );
+
+        // Check that we can't release the lock
+        vm.expectRevert();
+        pool.releaseActiveLock();
+
         // Anticipate a callback request to the relay
         vm.expectCall(address(bonsaiRelay), abi.encodeWithSelector(IBonsaiRelay.requestCallback.selector));
 
         // Request the callback
-        lock.requested = true;
-        lock.timestamp = block.timestamp;
-        assertEq(keccak256(abi.encode(pool.activeLockMakeRequest())), keccak256(abi.encode(lock)));
+        pool.activeLockMakeRequest();
+
+        // Check that we still can't release the lock
+        vm.expectRevert();
+        pool.releaseActiveLock();
 
         // Anticipate a callback invocation on the pool contract
         vm.expectCall(address(pool), abi.encodeWithSelector(UniswapV3Pool.activeLockCallback.selector));
@@ -644,8 +660,22 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
         runPendingCallbackRequest();
 
         // Release the lock
-        lock.executed = true;
-        //assertEq(keccak256(abi.encode(pool.releaseActiveLock())), keccak256(abi.encode(lock)));
+        pool.releaseActiveLock();
+
+        // Anticipate a callback request to the relay
+        vm.expectCall(address(bonsaiRelay), abi.encodeWithSelector(IBonsaiRelay.requestCallback.selector));
+
+        // Request the callback
+        pool.activeLockMakeRequest();
+
+        // Check that we can't release the lock yet
+        vm.expectRevert();
+        pool.releaseActiveLock();
+
+        // Time warp to the lock expiration
+        vm.warp(2 minutes);
+
+        // Check that the lock has timed out
         pool.releaseActiveLock();
     }
 

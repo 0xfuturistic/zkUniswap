@@ -149,7 +149,9 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         bool executed;
     }
 
-    Lock[] public locks;
+    mapping(uint256 => Lock) locks;
+    uint256 first = 1;
+    uint256 last = 0;
 
     uint256 public activeLockIndex;
 
@@ -474,7 +476,8 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         bytes calldata data,
         uint256 duration
     ) public returns (Lock memory lock) {
-        lock = Lock({
+        last += 1;
+        locks[last] = lock = Lock({
             recipient: recipient,
             sender: msg.sender,
             zeroForOne: zeroForOne,
@@ -486,8 +489,6 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
             requested: false,
             executed: false
         });
-
-        locks.push(lock);
     }
 
     /// @notice Sends a request to Bonsai to have have the swap step calculated.
@@ -497,8 +498,8 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
     function activeLockMakeRequest() public returns (Lock memory lock) {
         require(!(lock = _getActiveLock()).requested, "Already requested");
 
-        lock.requested = true;
-        lock.timestamp = _blockTimestamp();
+        locks[_getActiveLockIndex()].requested = true;
+        locks[_getActiveLockIndex()].timestamp = _blockTimestamp();
 
         // Caching for gas saving
         Slot0 memory slot0_ = slot0;
@@ -540,7 +541,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         require(!(lock = _getActiveLock()).executed, "Already executed");
         require(!_hasLockTimedOut(lock), "Lock timed out");
 
-        lock.executed = true;
+        locks[_getActiveLockIndex()].executed = true;
 
         // Caching for gas saving
         Slot0 memory slot0_ = slot0;
@@ -649,21 +650,18 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         }
 
         emit Swap(lock.sender, lock.recipient, amount0, amount1, slot0.sqrtPriceX96, state.liquidity, slot0.tick);
-
-        releaseActiveLock();
     }
 
     function releaseActiveLock() public returns (Lock memory lock) {
+        require(last >= first); // non-empty queue
+
         lock = _getActiveLock();
 
-        require(!lock.executed && !_hasLockTimedOut(lock), "Lock not timed out");
+        if (!lock.executed && !_hasLockTimedOut(lock)) revert();
 
-        // todo: improve this
-        if (activeLockIndex + 1 == locks.length) {
-            activeLockIndex = 0;
-        } else {
-            activeLockIndex++;
-        }
+        delete locks[_getActiveLockIndex()];
+
+        _increaseActiveLockIndex();
     }
 
     function flash(uint256 amount0, uint256 amount1, bytes calldata data) public {
@@ -723,14 +721,18 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
     }
 
     function _getActiveLock() internal view returns (Lock memory lock) {
-        lock = locks[_getActiveLockIndex()];
+        lock = locks[first];
     }
 
     function _getActiveLockIndex() internal view returns (uint256 index) {
-        index = activeLockIndex;
+        index = first;
     }
 
     function _hasLockTimedOut(Lock memory lock) internal view returns (bool timedOut) {
         timedOut = _blockTimestamp() - lock.timestamp > lock.duration;
+    }
+
+    function _increaseActiveLockIndex() internal {
+        first += 1;
     }
 }
