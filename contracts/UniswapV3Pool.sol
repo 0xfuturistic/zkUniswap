@@ -38,6 +38,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
     error NotEnoughLiquidity();
     error ZeroLiquidity();
     error InvalidJournal();
+    error EmptyLocks();
 
     event Burn(
         address indexed owner,
@@ -164,6 +165,11 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
     mapping(int16 => uint256) public tickBitmap;
     mapping(bytes32 => Position.Info) public positions;
     Oracle.Observation[65535] public observations;
+
+    modifier NonEmptyLocks() {
+        if (last < first) revert EmptyLocks();
+        _;
+    }
 
     constructor() {
         (factory, token0, token1, tickSpacing, fee, relay, swapImageId) =
@@ -495,7 +501,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
     /// @dev This function sends the request to Bonsai through the on-chain relay.
     ///      The request will trigger Bonsai to run the specified RISC Zero guest program with
     ///      the given input and asynchronously return the verified results via the callback below.
-    function activeLockMakeRequest() public returns (Lock memory lock) {
+    function activeLockMakeRequest() public NonEmptyLocks returns (Lock memory lock) {
         lock = locks[first];
         require(!lock.requested, "Already requested");
 
@@ -539,7 +545,12 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         uint256 amount_in,
         uint256 amount_out,
         uint256 fee_amount
-    ) external onlyBonsaiCallback(swapImageId) returns (int256 amount0, int256 amount1, Lock memory lock) {
+    )
+        external
+        NonEmptyLocks
+        onlyBonsaiCallback(swapImageId)
+        returns (int256 amount0, int256 amount1, Lock memory lock)
+    {
         lock = locks[first];
         require(lockIndex == first, "Invalid lock index");
         require(!lock.executed, "Already executed");
@@ -658,9 +669,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         emit Swap(lock.sender, lock.recipient, amount0, amount1, slot0.sqrtPriceX96, state.liquidity, slot0.tick);
     }
 
-    function releaseActiveLock() public returns (Lock memory lock) {
-        require(last >= first); // non-empty queue
-
+    function releaseActiveLock() public NonEmptyLocks returns (Lock memory lock) {
         lock = locks[first];
 
         if (!lock.requested || !lock.executed && !hasLockTimedOut(lock)) revert();
