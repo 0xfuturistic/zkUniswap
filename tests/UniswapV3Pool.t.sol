@@ -628,23 +628,14 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
         pool.releaseActiveLock();
 
         // Acquire lock
-        pool.acquireLock(
-            address(this),
-            false,
-            swapAmount,
-            sqrtP(5004),
-            encodeExtra(address(weth), address(usdc), address(this)),
-            2 minutes
+        vm.deal(address(this), 10000 ether);
+        pool.acquireLock{value: 100 ether}(
+            address(this), false, swapAmount, sqrtP(5004), encodeExtra(address(weth), address(usdc), address(this))
         );
 
         // Acquire another lock
-        pool.acquireLock(
-            address(this),
-            false,
-            swapAmount,
-            sqrtP(5004),
-            encodeExtra(address(weth), address(usdc), address(this)),
-            1 minutes
+        pool.acquireLock{value: 200 ether}(
+            address(this), false, swapAmount, sqrtP(5004), encodeExtra(address(weth), address(usdc), address(this))
         );
 
         // Check that we can't release the lock
@@ -685,11 +676,13 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
         pool.releaseActiveLock();
 
         // Time warp to the lock expiration
-        vm.warp(2 minutes);
+        vm.warp(pool.LOCK_TIMEOUT() + 100);
 
         // Check that the lock has timed out and we can release it
         pool.releaseActiveLock();
     }
+
+    fallback() external payable {}
 
     ////////////////////////////////////////////////////////////////////////////
     //
