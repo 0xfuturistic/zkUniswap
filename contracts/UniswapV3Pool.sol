@@ -654,7 +654,16 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
     }
 
     function releaseActiveLock() public returns (Lock memory lock) {
-        if ((lock = _getActiveLock()).executed || _hasLockTimedOut(lock)) activeLockIndex++;
+        lock = _getActiveLock();
+
+        require(!lock.executed && !_hasLockTimedOut(lock), "Lock not timed out");
+
+        // todo: improve this
+        if (activeLockIndex + 1 == locks.length) {
+            activeLockIndex = 0;
+        } else {
+            activeLockIndex++;
+        }
     }
 
     function flash(uint256 amount0, uint256 amount1, bytes calldata data) public {
