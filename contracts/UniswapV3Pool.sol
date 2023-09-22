@@ -38,8 +38,8 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
     error NotEnoughLiquidity();
     error ZeroLiquidity();
     error InvalidJournal();
-    error LockedBy(address);
     error InvalidLockVersion();
+    error AlreadyLocked();
 
     event Burn(
         address indexed owner,
@@ -95,6 +95,10 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
     /// @dev Should be set to the maximum amount of gas your callback might reasonably consume.
     uint64 private constant BONSAI_CALLBACK_GAS_LIMIT = 100000;
 
+    uint64 public lockVersion;
+
+    uint64 public constant maxLockDuration = 1 minutes;
+
     // Pool parameters
     address public immutable factory;
     address public immutable token0;
@@ -145,13 +149,12 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         uint256 amountSpecified;
         uint160 sqrtPriceLimitX96;
         bytes data;
+        uint256 timestamp;
     }
-
-    Slot0 public slot0;
 
     Session public session;
 
-    uint64 public lockVersion;
+    Slot0 public slot0;
 
     // Amount of liquidity, L.
     uint128 public liquidity;
@@ -160,12 +163,6 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
     mapping(int16 => uint256) public tickBitmap;
     mapping(bytes32 => Position.Info) public positions;
     Oracle.Observation[65535] public observations;
-
-    modifier onlyByLocker() {
-        address locker = _getActiveLocker();
-        if (msg.sender != locker) revert LockedBy(locker);
-        _;
-    }
 
     constructor() {
         (factory, token0, token1, tickSpacing, fee, relay, swapImageId) =
@@ -481,12 +478,9 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         uint160 sqrtPriceLimitX96,
         bytes calldata data
     ) public {
-        // Caching for gas saving
-        Slot0 memory slot0_ = slot0;
+        if (_alreadyLocked()) revert AlreadyLocked();
 
-        (int24 nextTick,) = tickBitmap.nextInitializedTickWithinOneWord(slot0_.tick, int24(tickSpacing), zeroForOne);
-
-        uint160 sqrtPriceNextX96 = TickMath.getSqrtRatioAtTick(nextTick);
+        lockVersion++;
 
         session = Session({
             recipient: recipient,
@@ -494,10 +488,16 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
             zeroForOne: zeroForOne,
             amountSpecified: amountSpecified,
             sqrtPriceLimitX96: sqrtPriceLimitX96,
-            data: data
+            data: data,
+            timestamp: block.timestamp
         });
 
-        lockVersion++;
+        // Caching for gas saving
+        Slot0 memory slot0_ = slot0;
+
+        (int24 nextTick,) = tickBitmap.nextInitializedTickWithinOneWord(slot0_.tick, int24(tickSpacing), zeroForOne);
+
+        uint160 sqrtPriceNextX96 = TickMath.getSqrtRatioAtTick(nextTick);
 
         bonsaiRelay.requestCallback(
             swapImageId,
@@ -698,5 +698,13 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
 
     function _getLockVersion() internal view returns (uint64 version) {
         version = lockVersion;
+    }
+
+    function _hasLockTimedOut(Session memory session_) internal view returns (bool timedOut) {
+        timedOut = block.timestamp - session_.timestamp > maxLockDuration;
+    }
+
+    function _alreadyLocked() internal view returns (bool locked) {
+        locked = _getLockVersion() > 0 && !_hasLockTimedOut(session);
     }
 }
