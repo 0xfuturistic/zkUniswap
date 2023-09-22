@@ -23,6 +23,13 @@ import "./lib/TickMath.sol";
 import {IBonsaiRelay} from "bonsai/IBonsaiRelay.sol";
 import {BonsaiCallbackReceiver} from "./BonsaiCallbackReceiver.sol";
 
+import {ERC721} from "solmate/tokens/ERC721.sol";
+import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
+
+import {toDaysWadUnsafe} from "solmate/utils/SignedWadMath.sol";
+
+import {LinearVRGDA} from "VRGDAs/LinearVRGDA.sol";
+
 contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
     using Oracle for Oracle.Observation[65535];
     using Position for Position.Info;
