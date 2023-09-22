@@ -515,7 +515,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         bonsaiRelay.requestCallback(
             swapImageId,
             abi.encode(
-                _getActiveLockIndex(),
+                first,
                 slot0_.sqrtPriceX96,
                 (
                     lock.zeroForOne
@@ -541,9 +541,9 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         uint256 fee_amount
     ) external onlyBonsaiCallback(swapImageId) returns (int256 amount0, int256 amount1, Lock memory lock) {
         lock = locks[first];
-        require(lockIndex == _getActiveLockIndex(), "Invalid lock index");
+        require(lockIndex == first, "Invalid lock index");
         require(!lock.executed, "Already executed");
-        require(!_hasLockTimedOut(lock), "Lock timed out");
+        require(!hasLockTimedOut(lock), "Lock timed out");
 
         // Update lock
         lock.executed = true;
@@ -663,7 +663,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
 
         lock = locks[first];
 
-        if (!lock.executed && !_hasLockTimedOut(lock)) revert();
+        if (lock.requested && !lock.executed && !hasLockTimedOut(lock)) revert();
 
         delete locks[first];
 
@@ -709,6 +709,10 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         }
     }
 
+    function hasLockTimedOut(Lock memory lock) internal view returns (bool timedOut) {
+        timedOut = _blockTimestamp() - lock.timestamp > lock.duration;
+    }
+
     ////////////////////////////////////////////////////////////////////////////
     //
     // INTERNAL
@@ -724,21 +728,5 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
 
     function _blockTimestamp() internal view returns (uint32 timestamp) {
         timestamp = uint32(block.timestamp);
-    }
-
-    function _getActiveLock() internal view returns (Lock memory lock) {
-        lock = locks[first];
-    }
-
-    function _getActiveLockIndex() internal view returns (uint256 index) {
-        index = first;
-    }
-
-    function _hasLockTimedOut(Lock memory lock) internal view returns (bool timedOut) {
-        timedOut = _blockTimestamp() - lock.timestamp > lock.duration;
-    }
-
-    function _increaseActiveLockIndex() internal {
-        first += 1;
     }
 }
