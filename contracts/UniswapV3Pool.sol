@@ -511,7 +511,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         bonsaiRelay.requestCallback(
             swapImageId,
             abi.encode(
-                activeLockIndex,
+                _getActiveLockIndex(),
                 slot0_.sqrtPriceX96,
                 (
                     lock.zeroForOne
@@ -536,7 +536,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
         uint256 amount_out,
         uint256 fee_amount
     ) external onlyBonsaiCallback(swapImageId) returns (int256 amount0, int256 amount1, Lock memory lock) {
-        require(lockIndex == activeLockIndex, "Invalid lock index");
+        require(lockIndex == _getActiveLockIndex(), "Invalid lock index");
         require(!(lock = _getActiveLock()).executed, "Already executed");
         require(!_hasLockTimedOut(lock), "Lock timed out");
 
@@ -714,7 +714,11 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver {
     }
 
     function _getActiveLock() internal view returns (Lock memory lock) {
-        lock = locks[activeLockIndex];
+        lock = locks[_getActiveLockIndex()];
+    }
+
+    function _getActiveLockIndex() internal view returns (uint256 index) {
+        index = activeLockIndex;
     }
 
     function _hasLockTimedOut(Lock memory lock) internal view returns (bool timedOut) {
