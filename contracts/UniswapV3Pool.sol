@@ -495,6 +495,14 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
         emit Swap(msg.sender, recipient, amount0, amount1, slot0.sqrtPriceX96, state.liquidity, slot0.tick);
     }
 
+    /// @dev Acquires a lock for a swap in a variable rate gradual dutch auction (VRGDA).
+    /// @param recipient The address that will receive the tokens after the lock is executed.
+    /// @param zeroForOne If true, the swap is for token0, otherwise it is for token1.
+    /// @param amountSpecified The amount of tokens to swap.
+    /// @param sqrtPriceLimitX96 The square root of the price limit for the swap.
+    /// @param data Additional data to be passed to the callback.
+    /// @return lock The acquired lock.
+    /// @return mintedId The ID of the minted lock token.
     function acquireLock(
         address recipient,
         bool zeroForOne,
@@ -701,6 +709,9 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
         emit Swap(lock.sender, lock.recipient, amount0, amount1, slot0.sqrtPriceX96, state.liquidity, slot0.tick);
     }
 
+    /// @dev Releases the first active lock in the locks array and returns it.
+    /// @dev The locks array must not be empty. The lock must have been requested and either executed or timed out.
+    /// @return The lock that was released.
     function releaseActiveLock() public NonEmptyLocks returns (Lock memory lock) {
         lock = locks[first];
 
