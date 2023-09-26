@@ -637,7 +637,7 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
         pool.releaseActiveLock();
 
         // Anticipate a callback invocation on the pool contract
-        vm.expectCall(address(pool), abi.encodeWithSelector(UniswapV3Pool.activeLockCallback.selector));
+        vm.expectCall(address(pool), abi.encodeWithSelector(UniswapV3Pool.settleSwap.selector));
 
         // Relay the solution as a callback
         runPendingCallbackRequest();

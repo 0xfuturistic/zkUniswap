@@ -550,7 +550,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
                     fee
                 ),
                 address(this),
-                this.activeLockCallback.selector,
+                this.settleSwap.selector,
                 BONSAI_CALLBACK_GAS_LIMIT
             );
 
@@ -562,13 +562,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
     }
 
     /// @notice Callback function logic for processing verified journals from Bonsai.
-    function activeLockCallback(
-        uint64 lockIndex,
-        uint160 sqrt_p,
-        uint256 amount_in,
-        uint256 amount_out,
-        uint256 fee_amount
-    )
+    function settleSwap(uint64 lockIndex, uint160 sqrt_p, uint256 amount_in, uint256 amount_out, uint256 fee_amount)
         external
         NonEmptyLocks
         onlyBonsaiCallback(swapImageId)
