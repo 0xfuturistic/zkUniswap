@@ -161,11 +161,9 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
         bool executed;
     }
 
-    uint32 public LOCK_TIMEOUT = 1 minutes;
+    SwapRequest public request;
 
-    mapping(uint256 => SwapRequest) locks;
-    uint256 first = 1;
-    uint256 last = 0;
+    uint32 public LOCK_TIMEOUT = 1 minutes;
 
     uint256 public totalSold; // The total number of locks sold so far.
 
@@ -180,11 +178,6 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
     mapping(int16 => uint256) public tickBitmap;
     mapping(bytes32 => Position.Info) public positions;
     Oracle.Observation[65535] public observations;
-
-    modifier NonEmptySwapRequests() {
-        if (last < first) revert EmptySwapRequests();
-        _;
-    }
 
     constructor()
         LinearVRGDA(
@@ -501,15 +494,14 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
         uint256 amountSpecified,
         uint160 sqrtPriceLimitX96,
         bytes calldata data
-    ) public payable returns (SwapRequest memory lock, uint256 mintedId) {
+    ) public payable returns (uint256 mintedId) {
         unchecked {
             // Note: By using toDaysWadUnsafe(block.timestamp - startTime) we are establishing that 1 "unit of time" is 1 day.
             uint256 price = getVRGDAPrice(toDaysWadUnsafe(block.timestamp - startTime), mintedId = totalSold++);
 
             require(msg.value >= price, "UNDERPAID"); // Don't allow underpaying.
 
-            last += 1;
-            locks[last] = lock = SwapRequest({
+            request = SwapRequest({
                 recipient: recipient,
                 sender: msg.sender,
                 zeroForOne: zeroForOne,
@@ -517,36 +509,31 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
                 sqrtPriceLimitX96: sqrtPriceLimitX96,
                 data: data,
                 duration: LOCK_TIMEOUT,
-                timestamp: 0,
-                requested: false,
+                timestamp: _blockTimestamp(),
+                requested: true,
                 executed: false
             });
-
-            // Update lock
-            lock.requested = true;
-            lock.timestamp = _blockTimestamp();
-            locks[first] = lock;
 
             // Caching for gas saving
             Slot0 memory slot0_ = slot0;
 
             (int24 nextTick,) =
-                tickBitmap.nextInitializedTickWithinOneWord(slot0_.tick, int24(tickSpacing), lock.zeroForOne);
+                tickBitmap.nextInitializedTickWithinOneWord(slot0_.tick, int24(tickSpacing), request.zeroForOne);
 
             uint160 sqrtPriceNextX96 = TickMath.getSqrtRatioAtTick(nextTick);
 
             bonsaiRelay.requestCallback(
                 swapImageId,
                 abi.encode(
-                    first,
+                    1,
                     slot0_.sqrtPriceX96,
                     (
-                        lock.zeroForOne
-                            ? sqrtPriceNextX96 < lock.sqrtPriceLimitX96
-                            : sqrtPriceNextX96 > lock.sqrtPriceLimitX96
-                    ) ? lock.sqrtPriceLimitX96 : sqrtPriceNextX96,
+                        request.zeroForOne
+                            ? sqrtPriceNextX96 < request.sqrtPriceLimitX96
+                            : sqrtPriceNextX96 > request.sqrtPriceLimitX96
+                    ) ? request.sqrtPriceLimitX96 : sqrtPriceNextX96,
                     liquidity,
-                    lock.amountSpecified,
+                    request.amountSpecified,
                     fee
                 ),
                 address(this),
@@ -555,54 +542,51 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
             );
 
             // Note: We do this at the end to avoid creating a reentrancy vector.
-            // Refund the user any ETH they spent over the current price of the lock.
+            // Refund the user any ETH they spent over the current price of the request.
             // Unchecked is safe here because we validate msg.value >= price above.
             SafeTransferLib.safeTransferETH(msg.sender, msg.value - price);
         }
     }
 
     /// @notice Callback function logic for processing verified journals from Bonsai.
-    function settleSwap(uint64 lockIndex, uint160 sqrt_p, uint256 amount_in, uint256 amount_out, uint256 fee_amount)
+    function settleSwap(uint64 requestIndex, uint160 sqrt_p, uint256 amount_in, uint256 amount_out, uint256 fee_amount)
         external
-        NonEmptySwapRequests
         onlyBonsaiCallback(swapImageId)
-        returns (int256 amount0, int256 amount1, SwapRequest memory lock)
+        returns (int256 amount0, int256 amount1)
     {
-        lock = locks[first];
-        if (lockIndex != first) revert InvalidSwapRequestIndex();
-        if (lock.executed) revert SwapRequestAlreadyExecuted();
-        if (hasSwapRequestTimedOut(lock)) revert SwapRequestTimedOut();
+        if (requestIndex != 1) revert InvalidSwapRequestIndex();
+        if (request.executed) revert SwapRequestAlreadyExecuted();
+        if (hasSwapRequestTimedOut(request)) revert SwapRequestTimedOut();
 
-        // Update lock
-        lock.executed = true;
-        locks[first] = lock;
+        // Update request
+        request.executed = true;
 
         // Caching for gas saving
         Slot0 memory slot0_ = slot0;
         uint128 liquidity_ = liquidity;
 
         if (
-            lock.zeroForOne
-                ? lock.sqrtPriceLimitX96 > slot0_.sqrtPriceX96 || lock.sqrtPriceLimitX96 < TickMath.MIN_SQRT_RATIO
-                : lock.sqrtPriceLimitX96 < slot0_.sqrtPriceX96 || lock.sqrtPriceLimitX96 > TickMath.MAX_SQRT_RATIO
+            request.zeroForOne
+                ? request.sqrtPriceLimitX96 > slot0_.sqrtPriceX96 || request.sqrtPriceLimitX96 < TickMath.MIN_SQRT_RATIO
+                : request.sqrtPriceLimitX96 < slot0_.sqrtPriceX96 || request.sqrtPriceLimitX96 > TickMath.MAX_SQRT_RATIO
         ) revert InvalidPriceLimit();
 
         SwapState memory state = SwapState({
-            amountSpecifiedRemaining: lock.amountSpecified,
+            amountSpecifiedRemaining: request.amountSpecified,
             amountCalculated: 0,
             sqrtPriceX96: slot0_.sqrtPriceX96,
             tick: slot0_.tick,
-            feeGrowthGlobalX128: lock.zeroForOne ? feeGrowthGlobal0X128 : feeGrowthGlobal1X128,
+            feeGrowthGlobalX128: request.zeroForOne ? feeGrowthGlobal0X128 : feeGrowthGlobal1X128,
             liquidity: liquidity_
         });
 
-        while (state.amountSpecifiedRemaining > 0 && state.sqrtPriceX96 != lock.sqrtPriceLimitX96) {
+        while (state.amountSpecifiedRemaining > 0 && state.sqrtPriceX96 != request.sqrtPriceLimitX96) {
             StepState memory step;
 
             step.sqrtPriceStartX96 = state.sqrtPriceX96;
 
             (step.nextTick,) =
-                tickBitmap.nextInitializedTickWithinOneWord(state.tick, int24(tickSpacing), lock.zeroForOne);
+                tickBitmap.nextInitializedTickWithinOneWord(state.tick, int24(tickSpacing), request.zeroForOne);
 
             step.sqrtPriceNextX96 = TickMath.getSqrtRatioAtTick(step.nextTick);
 
@@ -622,17 +606,17 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
             if (state.sqrtPriceX96 == step.sqrtPriceNextX96) {
                 int128 liquidityDelta = ticks.cross(
                     step.nextTick,
-                    (lock.zeroForOne ? state.feeGrowthGlobalX128 : feeGrowthGlobal0X128),
-                    (lock.zeroForOne ? feeGrowthGlobal1X128 : state.feeGrowthGlobalX128)
+                    (request.zeroForOne ? state.feeGrowthGlobalX128 : feeGrowthGlobal0X128),
+                    (request.zeroForOne ? feeGrowthGlobal1X128 : state.feeGrowthGlobalX128)
                 );
 
-                if (lock.zeroForOne) liquidityDelta = -liquidityDelta;
+                if (request.zeroForOne) liquidityDelta = -liquidityDelta;
 
                 state.liquidity = LiquidityMath.addLiquidity(state.liquidity, liquidityDelta);
 
                 if (state.liquidity == 0) revert NotEnoughLiquidity();
 
-                state.tick = lock.zeroForOne ? step.nextTick - 1 : step.nextTick;
+                state.tick = request.zeroForOne ? step.nextTick - 1 : step.nextTick;
             } else if (state.sqrtPriceX96 != step.sqrtPriceStartX96) {
                 state.tick = TickMath.getTickAtSqrtRatio(state.sqrtPriceX96);
             }
@@ -655,48 +639,44 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
 
         if (liquidity_ != state.liquidity) liquidity = state.liquidity;
 
-        if (lock.zeroForOne) {
+        if (request.zeroForOne) {
             feeGrowthGlobal0X128 = state.feeGrowthGlobalX128;
         } else {
             feeGrowthGlobal1X128 = state.feeGrowthGlobalX128;
         }
 
-        (amount0, amount1) = lock.zeroForOne
-            ? (int256(lock.amountSpecified - state.amountSpecifiedRemaining), -int256(state.amountCalculated))
-            : (-int256(state.amountCalculated), int256(lock.amountSpecified - state.amountSpecifiedRemaining));
+        (amount0, amount1) = request.zeroForOne
+            ? (int256(request.amountSpecified - state.amountSpecifiedRemaining), -int256(state.amountCalculated))
+            : (-int256(state.amountCalculated), int256(request.amountSpecified - state.amountSpecifiedRemaining));
 
-        if (lock.zeroForOne) {
-            IERC20(token1).transfer(lock.recipient, uint256(-amount1));
+        if (request.zeroForOne) {
+            IERC20(token1).transfer(request.recipient, uint256(-amount1));
 
             uint256 balance0Before = balance0();
-            IUniswapV3SwapCallback(lock.sender).uniswapV3SwapCallback(amount0, amount1, lock.data);
+            IUniswapV3SwapCallback(request.sender).uniswapV3SwapCallback(amount0, amount1, request.data);
             if (balance0Before + uint256(amount0) > balance0()) {
                 revert InsufficientInputAmount();
             }
         } else {
-            IERC20(token0).transfer(lock.recipient, uint256(-amount0));
+            IERC20(token0).transfer(request.recipient, uint256(-amount0));
 
             uint256 balance1Before = balance1();
-            IUniswapV3SwapCallback(lock.sender).uniswapV3SwapCallback(amount0, amount1, lock.data);
+            IUniswapV3SwapCallback(request.sender).uniswapV3SwapCallback(amount0, amount1, request.data);
             if (balance1Before + uint256(amount1) > balance1()) {
                 revert InsufficientInputAmount();
             }
         }
 
-        emit Swap(lock.sender, lock.recipient, amount0, amount1, slot0.sqrtPriceX96, state.liquidity, slot0.tick);
+        emit Swap(request.sender, request.recipient, amount0, amount1, slot0.sqrtPriceX96, state.liquidity, slot0.tick);
     }
 
-    /// @dev Releases the first active lock in the locks array and returns it.
-    /// @dev The locks array must not be empty. The lock must have been requested and either executed or timed out.
-    /// @return lock The lock that was released.
-    function timeoutRequest() public NonEmptySwapRequests returns (SwapRequest memory lock) {
-        lock = locks[first];
-
-        if (!lock.requested || !lock.executed && !hasSwapRequestTimedOut(lock)) revert CannotReleaseSwapRequest();
-
-        delete locks[first];
-
-        first += 1;
+    /// @dev Releases the first active request in the requests array and returns it.
+    /// @dev The requests array must not be empty. The request must have been requested and either executed or timed out.
+    /// @return request The request that was released.
+    function timeoutRequest() public returns (SwapRequest memory request) {
+        require(request.requested, "NOT_REQUESTED");
+        require(!request.executed, "ALREADY_EXECUTED");
+        require(hasSwapRequestTimedOut(request), "NOT_TIMED_OUT");
     }
 
     function flash(uint256 amount0, uint256 amount1, bytes calldata data) public {
