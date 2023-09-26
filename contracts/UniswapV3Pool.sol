@@ -711,7 +711,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
 
     /// @dev Releases the first active lock in the locks array and returns it.
     /// @dev The locks array must not be empty. The lock must have been requested and either executed or timed out.
-    /// @return The lock that was released.
+    /// @return lock The lock that was released.
     function releaseActiveLock() public NonEmptyLocks returns (Lock memory lock) {
         lock = locks[first];
 
