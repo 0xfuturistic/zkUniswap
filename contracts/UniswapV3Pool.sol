@@ -165,6 +165,9 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
 
     uint32 public LOCK_TIMEOUT = 1 minutes;
 
+    int256 public cache_lastAmount0;
+    int256 public cache_lastAmount1;
+
     uint256 public totalSold; // The total number of locks sold so far.
 
     uint256 public immutable startTime = block.timestamp; // When VRGDA sales begun.
@@ -670,6 +673,8 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
         emit Swap(request.sender, request.recipient, amount0, amount1, slot0.sqrtPriceX96, state.liquidity, slot0.tick);
 
         _unlockPool();
+
+        (cache_lastAmount0, cache_lastAmount1) = (amount0, amount1);
     }
 
     function timeoutLock() public {
