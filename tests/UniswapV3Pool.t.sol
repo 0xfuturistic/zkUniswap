@@ -621,28 +621,23 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
         usdc.mint(address(this), swapAmount);
         usdc.approve(address(this), swapAmount);
 
-        // Check that we can't release any locks yet
+        // Check that we can't timeout a non-existent request
         vm.expectRevert();
-        pool.releaseActiveLock();
+        pool.timeoutRequest();
 
+        // Make a swap request
         vm.expectCall(address(bonsaiRelay), abi.encodeWithSelector(IBonsaiRelay.requestCallback.selector));
-
         pool.requestSwap{value: 100 ether}(
             address(this), false, swapAmount, sqrtP(5004), encodeExtra(address(weth), address(usdc), address(this))
         );
 
-        // Check that we can't release the lock
+        // Check that we can't timeout the request before the timeout
         vm.expectRevert();
-        pool.releaseActiveLock();
-
-        // Anticipate a callback invocation on the pool contract
-        vm.expectCall(address(pool), abi.encodeWithSelector(UniswapV3Pool.settleSwap.selector));
+        pool.timeoutRequest();
 
         // Relay the solution as a callback
+        vm.expectCall(address(pool), abi.encodeWithSelector(UniswapV3Pool.settleSwap.selector));
         runPendingCallbackRequest();
-
-        // Release the lock
-        pool.releaseActiveLock();
     }
 
     function testSwapRequestTimeout() public {}
