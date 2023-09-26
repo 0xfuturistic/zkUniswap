@@ -631,6 +631,15 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
             address(this), false, swapAmount, sqrtP(5004), encodeExtra(address(weth), address(usdc), address(this))
         );
 
+        // Check that the pool is locked
+        assertTrue(pool.isPoolLocked());
+
+        // Check that we can't make another swap request
+        vm.expectRevert();
+        pool.requestSwap{value: 100 ether}(
+            address(this), false, swapAmount, sqrtP(5004), encodeExtra(address(weth), address(usdc), address(this))
+        );
+
         // Check that we can't timeout the request before the timeout
         vm.expectRevert();
         pool.timeoutLock();

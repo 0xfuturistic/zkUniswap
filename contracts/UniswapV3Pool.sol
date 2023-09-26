@@ -179,6 +179,16 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
     mapping(bytes32 => Position.Info) public positions;
     Oracle.Observation[65535] public observations;
 
+    modifier PoolLocked() {
+        require(isPoolLocked(), "POOL_NOT_LOCKED");
+        _;
+    }
+
+    modifier PoolNotLocked() {
+        require(!isPoolLocked(), "POOL_LOCKED");
+        _;
+    }
+
     constructor()
         LinearVRGDA(
             69.42e18, // Target price.
@@ -494,7 +504,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
         uint256 amountSpecified,
         uint160 sqrtPriceLimitX96,
         bytes calldata data
-    ) public payable returns (uint256 mintedId) {
+    ) public payable PoolNotLocked returns (uint256 mintedId) {
         unchecked {
             // Note: By using toDaysWadUnsafe(block.timestamp - startTime) we are establishing that 1 "unit of time" is 1 day.
             uint256 price = getVRGDAPrice(toDaysWadUnsafe(block.timestamp - startTime), mintedId = totalSold++);
@@ -541,6 +551,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
     function settleSwap(uint64 requestIndex, uint160 sqrt_p, uint256 amount_in, uint256 amount_out, uint256 fee_amount)
         external
         onlyBonsaiCallback(swapImageId)
+        PoolLocked
         returns (int256 amount0, int256 amount1)
     {
         if (requestIndex != 1) revert InvalidSwapRequestIndex();
@@ -662,15 +673,12 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
     }
 
     function timeoutLock() public {
-        require(request.requested, "NOT_REQUESTED");
-        require(!request.executed, "ALREADY_EXECUTED");
         require(hasLockTimedOut(), "NOT_TIMED_OUT");
 
         _unlockPool();
     }
 
-    function hasLockTimedOut() internal view returns (bool timedOut) {
-        require(isPoolLocked(), "POOL_NOT_LOCKED");
+    function hasLockTimedOut() public view PoolLocked returns (bool timedOut) {
         timedOut = _blockTimestamp() - request.timestamp > request.duration;
     }
 
@@ -741,7 +749,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
         uint256 amountSpecified,
         uint160 sqrtPriceLimitX96,
         bytes calldata data
-    ) internal {
+    ) internal PoolNotLocked {
         request = SwapRequest({
             recipient: recipient,
             sender: sender,
@@ -756,7 +764,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
         });
     }
 
-    function _unlockPool() internal {
+    function _unlockPool() internal PoolLocked {
         request.requested = false;
     }
 }
