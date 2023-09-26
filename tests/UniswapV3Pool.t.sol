@@ -380,9 +380,13 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
         usdc.mint(address(this), swapAmount);
         usdc.approve(address(this), swapAmount);
 
-        (int256 swapAmount0, int256 swapAmount1) = pool.swap(
+        pool.requestSwap{value: 100 ether}(
             address(this), false, swapAmount, sqrtP(5004), encodeExtra(address(weth), address(usdc), address(this))
         );
+
+        runPendingCallbackRequest();
+
+        (int256 swapAmount0, int256 swapAmount1) = (pool.cache_lastAmount0(), pool.cache_lastAmount1());
 
         pool.burn(liq.lowerTick, liq.upperTick, liq.amount);
 
@@ -428,9 +432,13 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
         usdc.mint(address(this), swapAmount);
         usdc.approve(address(this), swapAmount);
 
-        (int256 swapAmount0, int256 swapAmount1) = pool.swap(
+        pool.requestSwap{value: 100 ether}(
             address(this), false, swapAmount, sqrtP(5004), encodeExtra(address(weth), address(usdc), address(this))
         );
+
+        runPendingCallbackRequest();
+
+        (int256 swapAmount0, int256 swapAmount1) = (pool.cache_lastAmount0(), pool.cache_lastAmount1());
 
         pool.burn(liq.lowerTick, liq.upperTick, 0);
 
@@ -479,9 +487,11 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
         usdc.mint(address(this), swapAmount);
         usdc.approve(address(this), swapAmount);
 
-        pool.swap(
+        pool.requestSwap{value: 100 ether}(
             address(this), false, swapAmount, sqrtP(5004), encodeExtra(address(weth), address(usdc), address(this))
         );
+
+        runPendingCallbackRequest();
 
         pool.burn(liq.lowerTick, liq.upperTick, liq.amount);
 
@@ -513,9 +523,13 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
         usdc.approve(address(this), swapAmount);
 
         int256[] memory swapAmounts = new int256[](2);
-        (swapAmounts[0], swapAmounts[1]) = pool.swap(
+        pool.requestSwap{value: 100 ether}(
             address(this), false, swapAmount, sqrtP(5004), encodeExtra(address(weth), address(usdc), address(this))
         );
+
+        runPendingCallbackRequest();
+
+        (swapAmounts[0], swapAmounts[1]) = (pool.cache_lastAmount0(), pool.cache_lastAmount1());
 
         pool.burn(liq.lowerTick, liq.upperTick, liq.amount / 2);
 
