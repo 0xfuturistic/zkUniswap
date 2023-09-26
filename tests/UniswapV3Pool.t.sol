@@ -605,7 +605,7 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
         assertTrue(flashCallbackCalled, "flash callback wasn't called");
     }
 
-    function testMockCall() public {
+    function testSwapRequest() public {
         setupPool(
             PoolParams({
                 balances: [uint256(1 ether), 5000 ether],
@@ -643,24 +643,9 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
 
         // Release the lock
         pool.releaseActiveLock();
-
-        /*
-        // Anticipate a callback request to the relay
-        vm.expectCall(address(bonsaiRelay), abi.encodeWithSelector(IBonsaiRelay.requestCallback.selector));
-
-        // Request the callback
-        pool.requestSwap();
-
-        // Check that we can't release the lock yet
-        vm.expectRevert();
-        pool.releaseActiveLock();
-
-        // Time warp to the lock expiration
-        vm.warp(pool.LOCK_TIMEOUT() + 2);
-
-        // Check that the lock has timed out and we can release it
-        pool.releaseActiveLock();*/
     }
+
+    function testSwapRequestTimeout() public {}
 
     fallback() external payable {}
 
