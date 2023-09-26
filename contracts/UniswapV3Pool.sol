@@ -44,12 +44,12 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
     error NotEnoughLiquidity();
     error ZeroLiquidity();
     error InvalidJournal();
-    error EmptyLocks();
-    error CannotReleaseLock();
-    error InvalidLockIndex();
-    error LockTimedOut();
-    error LockAlreadyExecuted();
-    error LockAlreadyRequested();
+    error EmptySwapRequests();
+    error CannotReleaseSwapRequest();
+    error InvalidSwapRequestIndex();
+    error SwapRequestTimedOut();
+    error SwapRequestAlreadyExecuted();
+    error SwapRequestAlreadyRequested();
 
     event Burn(
         address indexed owner,
@@ -148,7 +148,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
         uint256 feeAmount;
     }
 
-    struct Lock {
+    struct SwapRequest {
         address recipient;
         address sender;
         bool zeroForOne;
@@ -163,7 +163,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
 
     uint32 public LOCK_TIMEOUT = 1 minutes;
 
-    mapping(uint256 => Lock) locks;
+    mapping(uint256 => SwapRequest) locks;
     uint256 first = 1;
     uint256 last = 0;
 
@@ -181,8 +181,8 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
     mapping(bytes32 => Position.Info) public positions;
     Oracle.Observation[65535] public observations;
 
-    modifier NonEmptyLocks() {
-        if (last < first) revert EmptyLocks();
+    modifier NonEmptySwapRequests() {
+        if (last < first) revert EmptySwapRequests();
         _;
     }
 
@@ -501,7 +501,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
         uint256 amountSpecified,
         uint160 sqrtPriceLimitX96,
         bytes calldata data
-    ) public payable returns (Lock memory lock, uint256 mintedId) {
+    ) public payable returns (SwapRequest memory lock, uint256 mintedId) {
         unchecked {
             // Note: By using toDaysWadUnsafe(block.timestamp - startTime) we are establishing that 1 "unit of time" is 1 day.
             uint256 price = getVRGDAPrice(toDaysWadUnsafe(block.timestamp - startTime), mintedId = totalSold++);
@@ -509,7 +509,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
             require(msg.value >= price, "UNDERPAID"); // Don't allow underpaying.
 
             last += 1;
-            locks[last] = lock = Lock({
+            locks[last] = lock = SwapRequest({
                 recipient: recipient,
                 sender: msg.sender,
                 zeroForOne: zeroForOne,
@@ -564,14 +564,14 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
     /// @notice Callback function logic for processing verified journals from Bonsai.
     function settleSwap(uint64 lockIndex, uint160 sqrt_p, uint256 amount_in, uint256 amount_out, uint256 fee_amount)
         external
-        NonEmptyLocks
+        NonEmptySwapRequests
         onlyBonsaiCallback(swapImageId)
-        returns (int256 amount0, int256 amount1, Lock memory lock)
+        returns (int256 amount0, int256 amount1, SwapRequest memory lock)
     {
         lock = locks[first];
-        if (lockIndex != first) revert InvalidLockIndex();
-        if (lock.executed) revert LockAlreadyExecuted();
-        if (hasLockTimedOut(lock)) revert LockTimedOut();
+        if (lockIndex != first) revert InvalidSwapRequestIndex();
+        if (lock.executed) revert SwapRequestAlreadyExecuted();
+        if (hasSwapRequestTimedOut(lock)) revert SwapRequestTimedOut();
 
         // Update lock
         lock.executed = true;
@@ -689,10 +689,10 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
     /// @dev Releases the first active lock in the locks array and returns it.
     /// @dev The locks array must not be empty. The lock must have been requested and either executed or timed out.
     /// @return lock The lock that was released.
-    function timeoutRequest() public NonEmptyLocks returns (Lock memory lock) {
+    function timeoutRequest() public NonEmptySwapRequests returns (SwapRequest memory lock) {
         lock = locks[first];
 
-        if (!lock.requested || !lock.executed && !hasLockTimedOut(lock)) revert CannotReleaseLock();
+        if (!lock.requested || !lock.executed && !hasSwapRequestTimedOut(lock)) revert CannotReleaseSwapRequest();
 
         delete locks[first];
 
@@ -738,7 +738,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
         }
     }
 
-    function hasLockTimedOut(Lock memory lock) internal view returns (bool timedOut) {
+    function hasSwapRequestTimedOut(SwapRequest memory lock) internal view returns (bool timedOut) {
         timedOut = _blockTimestamp() - lock.timestamp > lock.duration;
     }
 
