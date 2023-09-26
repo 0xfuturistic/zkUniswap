@@ -297,6 +297,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
 
     function mint(address owner, int24 lowerTick, int24 upperTick, uint128 amount, bytes calldata data)
         external
+        PoolNotLocked
         returns (uint256 amount0, uint256 amount1)
     {
         if (lowerTick >= upperTick || lowerTick < TickMath.MIN_TICK || upperTick > TickMath.MAX_TICK) {
@@ -336,7 +337,11 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
         emit Mint(msg.sender, owner, lowerTick, upperTick, amount, amount0, amount1);
     }
 
-    function burn(int24 lowerTick, int24 upperTick, uint128 amount) public returns (uint256 amount0, uint256 amount1) {
+    function burn(int24 lowerTick, int24 upperTick, uint128 amount)
+        public
+        PoolNotLocked
+        returns (uint256 amount0, uint256 amount1)
+    {
         (Position.Info storage position, int256 amount0Int, int256 amount1Int) = _modifyPosition(
             ModifyPositionParams({
                 owner: msg.sender,
@@ -363,7 +368,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
         int24 upperTick,
         uint128 amount0Requested,
         uint128 amount1Requested
-    ) public returns (uint128 amount0, uint128 amount1) {
+    ) public PoolNotLocked returns (uint128 amount0, uint128 amount1) {
         Position.Info storage position = positions.get(msg.sender, lowerTick, upperTick);
 
         amount0 = amount0Requested > position.tokensOwed0 ? position.tokensOwed0 : amount0Requested;
@@ -388,7 +393,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
         uint256 amountSpecified,
         uint160 sqrtPriceLimitX96,
         bytes calldata data
-    ) public returns (int256 amount0, int256 amount1) {
+    ) public PoolNotLocked returns (int256 amount0, int256 amount1) {
         // Caching for gas saving
         Slot0 memory slot0_ = slot0;
         uint128 liquidity_ = liquidity;
