@@ -623,7 +623,7 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
 
         // Check that we can't timeout a non-existent request
         vm.expectRevert();
-        pool.timeoutRequest();
+        pool.timeoutLock();
 
         // Make a swap request
         vm.expectCall(address(bonsaiRelay), abi.encodeWithSelector(IBonsaiRelay.requestCallback.selector));
@@ -633,11 +633,13 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
 
         // Check that we can't timeout the request before the timeout
         vm.expectRevert();
-        pool.timeoutRequest();
+        pool.timeoutLock();
 
         // Relay the solution as a callback
         vm.expectCall(address(pool), abi.encodeWithSelector(UniswapV3Pool.settleSwap.selector));
         runPendingCallbackRequest();
+
+        assertFalse(pool.isPoolLocked());
     }
 
     function testSwapRequestTimeout() public {}

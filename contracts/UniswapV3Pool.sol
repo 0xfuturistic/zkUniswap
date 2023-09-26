@@ -501,18 +501,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
 
             require(msg.value >= price, "UNDERPAID"); // Don't allow underpaying.
 
-            request = SwapRequest({
-                recipient: recipient,
-                sender: msg.sender,
-                zeroForOne: zeroForOne,
-                amountSpecified: amountSpecified,
-                sqrtPriceLimitX96: sqrtPriceLimitX96,
-                data: data,
-                duration: LOCK_TIMEOUT,
-                timestamp: _blockTimestamp(),
-                requested: true,
-                executed: false
-            });
+            _lockPool(recipient, msg.sender, zeroForOne, amountSpecified, sqrtPriceLimitX96, data);
 
             // Caching for gas saving
             Slot0 memory slot0_ = slot0;
@@ -556,7 +545,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
     {
         if (requestIndex != 1) revert InvalidSwapRequestIndex();
         if (request.executed) revert SwapRequestAlreadyExecuted();
-        if (hasSwapRequestTimedOut(request)) revert SwapRequestTimedOut();
+        if (hasLockTimedOut()) revert SwapRequestTimedOut();
 
         // Update request
         request.executed = true;
@@ -668,15 +657,25 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
         }
 
         emit Swap(request.sender, request.recipient, amount0, amount1, slot0.sqrtPriceX96, state.liquidity, slot0.tick);
+
+        _unlockPool();
     }
 
-    /// @dev Releases the first active request in the requests array and returns it.
-    /// @dev The requests array must not be empty. The request must have been requested and either executed or timed out.
-    /// @return request The request that was released.
-    function timeoutRequest() public returns (SwapRequest memory request) {
+    function timeoutLock() public {
         require(request.requested, "NOT_REQUESTED");
         require(!request.executed, "ALREADY_EXECUTED");
-        require(hasSwapRequestTimedOut(request), "NOT_TIMED_OUT");
+        require(hasLockTimedOut(), "NOT_TIMED_OUT");
+
+        _unlockPool();
+    }
+
+    function hasLockTimedOut() internal view returns (bool timedOut) {
+        require(isPoolLocked(), "POOL_NOT_LOCKED");
+        timedOut = _blockTimestamp() - request.timestamp > request.duration;
+    }
+
+    function isPoolLocked() public view returns (bool) {
+        return request.requested;
     }
 
     function flash(uint256 amount0, uint256 amount1, bytes calldata data) public {
@@ -718,10 +717,6 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
         }
     }
 
-    function hasSwapRequestTimedOut(SwapRequest memory lock) internal view returns (bool timedOut) {
-        timedOut = _blockTimestamp() - lock.timestamp > lock.duration;
-    }
-
     ////////////////////////////////////////////////////////////////////////////
     //
     // INTERNAL
@@ -737,5 +732,31 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
 
     function _blockTimestamp() internal view returns (uint32 timestamp) {
         timestamp = uint32(block.timestamp);
+    }
+
+    function _lockPool(
+        address recipient,
+        address sender,
+        bool zeroForOne,
+        uint256 amountSpecified,
+        uint160 sqrtPriceLimitX96,
+        bytes calldata data
+    ) internal {
+        request = SwapRequest({
+            recipient: recipient,
+            sender: sender,
+            zeroForOne: zeroForOne,
+            amountSpecified: amountSpecified,
+            sqrtPriceLimitX96: sqrtPriceLimitX96,
+            data: data,
+            duration: LOCK_TIMEOUT,
+            timestamp: _blockTimestamp(),
+            requested: true,
+            executed: false
+        });
+    }
+
+    function _unlockPool() internal {
+        request.requested = false;
     }
 }
