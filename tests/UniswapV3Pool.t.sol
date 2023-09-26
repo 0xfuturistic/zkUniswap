@@ -654,6 +654,9 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
             address(this), false, swapAmount, sqrtP(5004), encodeExtra(address(weth), address(usdc), address(this))
         );
 
+        // Check that the lock hasn't timed out
+        assertFalse(pool.hasLockTimedOut());
+
         // Check that we can't timeout the request before the timeout
         vm.expectRevert();
         pool.timeoutLock();
@@ -662,6 +665,7 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
         vm.expectCall(address(pool), abi.encodeWithSelector(UniswapV3Pool.settleSwap.selector));
         runPendingCallbackRequest();
 
+        // Check that the pool is unlocked
         assertFalse(pool.isPoolLocked());
     }
 
@@ -704,11 +708,16 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
         vm.expectRevert();
         pool.timeoutLock();
 
-        // Warp time to after the timeout
+        // Warp time to after the timeout plus delta
         vm.warp(pool.LOCK_TIMEOUT() + 2);
 
+        // Check that we can timeout the request
+        assertTrue(pool.hasLockTimedOut());
+
+        // Timeout the request
         pool.timeoutLock();
 
+        // Check that the pool is unlocked
         assertFalse(pool.isPoolLocked());
     }
 
