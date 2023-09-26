@@ -684,6 +684,8 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
 
     fallback() external payable {}
 
+    receive() external payable {}
+
     ////////////////////////////////////////////////////////////////////////////
     //
     // CALLBACKS
