@@ -495,15 +495,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
         emit Swap(msg.sender, recipient, amount0, amount1, slot0.sqrtPriceX96, state.liquidity, slot0.tick);
     }
 
-    /// @dev Acquires a lock for a swap in a variable rate gradual dutch auction (VRGDA).
-    /// @param recipient The address that will receive the tokens after the lock is executed.
-    /// @param zeroForOne If true, the swap is for token0, otherwise it is for token1.
-    /// @param amountSpecified The amount of tokens to swap.
-    /// @param sqrtPriceLimitX96 The square root of the price limit for the swap.
-    /// @param data Additional data to be passed to the callback.
-    /// @return lock The acquired lock.
-    /// @return mintedId The ID of the minted lock token.
-    function acquireLock(
+    function requestSwap(
         address recipient,
         bool zeroForOne,
         uint256 amountSpecified,
@@ -530,52 +522,43 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
                 executed: false
             });
 
+            // Update lock
+            lock.requested = true;
+            lock.timestamp = _blockTimestamp();
+            locks[first] = lock;
+
+            // Caching for gas saving
+            Slot0 memory slot0_ = slot0;
+
+            (int24 nextTick,) =
+                tickBitmap.nextInitializedTickWithinOneWord(slot0_.tick, int24(tickSpacing), lock.zeroForOne);
+
+            uint160 sqrtPriceNextX96 = TickMath.getSqrtRatioAtTick(nextTick);
+
+            bonsaiRelay.requestCallback(
+                swapImageId,
+                abi.encode(
+                    first,
+                    slot0_.sqrtPriceX96,
+                    (
+                        lock.zeroForOne
+                            ? sqrtPriceNextX96 < lock.sqrtPriceLimitX96
+                            : sqrtPriceNextX96 > lock.sqrtPriceLimitX96
+                    ) ? lock.sqrtPriceLimitX96 : sqrtPriceNextX96,
+                    liquidity,
+                    lock.amountSpecified,
+                    fee
+                ),
+                address(this),
+                this.activeLockCallback.selector,
+                BONSAI_CALLBACK_GAS_LIMIT
+            );
+
             // Note: We do this at the end to avoid creating a reentrancy vector.
             // Refund the user any ETH they spent over the current price of the lock.
             // Unchecked is safe here because we validate msg.value >= price above.
             SafeTransferLib.safeTransferETH(msg.sender, msg.value - price);
         }
-    }
-
-    /// @notice Sends a request to Bonsai to have have the swap step calculated.
-    /// @dev This function sends the request to Bonsai through the on-chain relay.
-    ///      The request will trigger Bonsai to run the specified RISC Zero guest program with
-    ///      the given input and asynchronously return the verified results via the callback below.
-    function activeLockMakeRequest() public NonEmptyLocks returns (Lock memory lock) {
-        lock = locks[first];
-        if (lock.requested) revert LockAlreadyRequested();
-
-        // Update lock
-        lock.requested = true;
-        lock.timestamp = _blockTimestamp();
-        locks[first] = lock;
-
-        // Caching for gas saving
-        Slot0 memory slot0_ = slot0;
-
-        (int24 nextTick,) =
-            tickBitmap.nextInitializedTickWithinOneWord(slot0_.tick, int24(tickSpacing), lock.zeroForOne);
-
-        uint160 sqrtPriceNextX96 = TickMath.getSqrtRatioAtTick(nextTick);
-
-        bonsaiRelay.requestCallback(
-            swapImageId,
-            abi.encode(
-                first,
-                slot0_.sqrtPriceX96,
-                (
-                    lock.zeroForOne
-                        ? sqrtPriceNextX96 < lock.sqrtPriceLimitX96
-                        : sqrtPriceNextX96 > lock.sqrtPriceLimitX96
-                ) ? lock.sqrtPriceLimitX96 : sqrtPriceNextX96,
-                liquidity,
-                lock.amountSpecified,
-                fee
-            ),
-            address(this),
-            this.activeLockCallback.selector,
-            BONSAI_CALLBACK_GAS_LIMIT
-        );
     }
 
     /// @notice Callback function logic for processing verified journals from Bonsai.

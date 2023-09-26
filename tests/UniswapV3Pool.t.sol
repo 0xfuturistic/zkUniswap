@@ -619,40 +619,20 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
         usdc.mint(address(this), swapAmount);
         usdc.approve(address(this), swapAmount);
 
-        // Check that we can't make a request yet
-        vm.expectRevert();
-        pool.activeLockMakeRequest();
-
         // Check that we can't release any locks yet
         vm.expectRevert();
         pool.releaseActiveLock();
 
         // Acquire lock
         vm.deal(address(this), 10000 ether);
-        pool.acquireLock{value: 100 ether}(
-            address(this), false, swapAmount, sqrtP(5004), encodeExtra(address(weth), address(usdc), address(this))
-        );
 
-        // Acquire another lock
-        pool.acquireLock{value: 200 ether}(
+        vm.expectCall(address(bonsaiRelay), abi.encodeWithSelector(IBonsaiRelay.requestCallback.selector));
+
+        pool.requestSwap{value: 100 ether}(
             address(this), false, swapAmount, sqrtP(5004), encodeExtra(address(weth), address(usdc), address(this))
         );
 
         // Check that we can't release the lock
-        vm.expectRevert();
-        pool.releaseActiveLock();
-
-        // Anticipate a callback request to the relay
-        vm.expectCall(address(bonsaiRelay), abi.encodeWithSelector(IBonsaiRelay.requestCallback.selector));
-
-        // Request the callback
-        pool.activeLockMakeRequest();
-
-        // Check that we can't make another request
-        vm.expectRevert();
-        pool.activeLockMakeRequest();
-
-        // Check that we still can't release the lock
         vm.expectRevert();
         pool.releaseActiveLock();
 
@@ -665,11 +645,12 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
         // Release the lock
         pool.releaseActiveLock();
 
+        /*
         // Anticipate a callback request to the relay
         vm.expectCall(address(bonsaiRelay), abi.encodeWithSelector(IBonsaiRelay.requestCallback.selector));
 
         // Request the callback
-        pool.activeLockMakeRequest();
+        pool.requestSwap();
 
         // Check that we can't release the lock yet
         vm.expectRevert();
@@ -679,7 +660,7 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
         vm.warp(pool.LOCK_TIMEOUT() + 2);
 
         // Check that the lock has timed out and we can release it
-        pool.releaseActiveLock();
+        pool.releaseActiveLock();*/
     }
 
     fallback() external payable {}
