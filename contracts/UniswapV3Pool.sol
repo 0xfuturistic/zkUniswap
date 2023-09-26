@@ -149,6 +149,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
     }
 
     struct SwapRequest {
+        bool active;
         address recipient;
         address sender;
         bool zeroForOne;
@@ -157,8 +158,6 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
         bytes data;
         uint32 duration;
         uint32 timestamp;
-        bool requested;
-        bool executed;
     }
 
     SwapRequest public request;
@@ -189,6 +188,11 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
 
     modifier PoolNotLocked() {
         require(!isPoolLocked(), "POOL_LOCKED");
+        _;
+    }
+
+    modifier RequestHasNotTimedout() {
+        require(!hasLockTimedOut(), "REQUEST_TIMED_OUT");
         _;
     }
 
@@ -560,14 +564,10 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
         external
         onlyBonsaiCallback(swapImageId)
         PoolLocked
+        RequestHasNotTimedout
         returns (int256 amount0, int256 amount1)
     {
         if (requestIndex != 1) revert InvalidSwapRequestIndex();
-        if (request.executed) revert SwapRequestAlreadyExecuted();
-        if (hasLockTimedOut()) revert SwapRequestTimedOut();
-
-        // Update request
-        request.executed = true;
 
         // Caching for gas saving
         Slot0 memory slot0_ = slot0;
@@ -693,7 +693,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
     }
 
     function isPoolLocked() public view returns (bool) {
-        return request.requested;
+        return request.active;
     }
 
     function flash(uint256 amount0, uint256 amount1, bytes calldata data) public {
@@ -761,6 +761,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
         bytes calldata data
     ) internal PoolNotLocked {
         request = SwapRequest({
+            active: true,
             recipient: recipient,
             sender: sender,
             zeroForOne: zeroForOne,
@@ -768,13 +769,11 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
             sqrtPriceLimitX96: sqrtPriceLimitX96,
             data: data,
             duration: LOCK_TIMEOUT,
-            timestamp: _blockTimestamp(),
-            requested: true,
-            executed: false
+            timestamp: _blockTimestamp()
         });
     }
 
     function _unlockPool() internal PoolLocked {
-        request.requested = false;
+        request.active = false;
     }
 }
