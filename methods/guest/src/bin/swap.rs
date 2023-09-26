@@ -2,7 +2,7 @@
 
 use std::io::Read;
 
-use ethabi::{ethereum_types::U256, ParamType, Token};
+use ethabi::{ethereum_types::U256, FixedBytes, ParamType, Token};
 use risc0_zkvm::guest::env;
 use uniswap_v3_math::swap_math::compute_swap_step;
 
@@ -16,18 +16,18 @@ fn main() {
     // the application contract.
     let input = ethabi::decode_whole(
         &[
-            ParamType::Uint(64),  // lock_version
-            ParamType::Uint(160), // price
-            ParamType::Uint(160), // price_target
-            ParamType::Uint(128), // liquidity
-            ParamType::Uint(256), // amount
-            ParamType::Uint(24),  // fee
+            ParamType::FixedBytes(32), // request root
+            ParamType::Uint(160),      // price
+            ParamType::Uint(160),      // price_target
+            ParamType::Uint(128),      // liquidity
+            ParamType::Uint(256),      // amount
+            ParamType::Uint(24),       // fee
         ],
         &input_bytes,
     )
     .unwrap();
 
-    let lock_version: U256 = input[0].clone().into_uint().unwrap();
+    let request_root: FixedBytes = input[0].clone().into_fixed_bytes().unwrap();
     let price: U256 = input[1].clone().into_uint().unwrap();
     let price_target: U256 = input[2].clone().into_uint().unwrap();
     let liquidity: u128 = input[3].clone().into_uint().unwrap().as_u128();
@@ -40,7 +40,7 @@ fn main() {
     // Commit the journal that will be received by the application contract.
     // Encoded types should match the args expected by the application callback.
     env::commit_slice(&ethabi::encode(&[
-        Token::Uint(lock_version),
+        Token::FixedBytes(request_root),
         Token::Uint(sqrt_p),
         Token::Uint(amount_in),
         Token::Uint(amount_out),

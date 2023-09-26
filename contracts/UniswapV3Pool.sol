@@ -46,7 +46,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
     error InvalidJournal();
     error EmptySwapRequests();
     error CannotReleaseSwapRequest();
-    error InvalidSwapRequestIndex();
+    error InvalidSwapRequestRoot();
     error SwapRequestTimedOut();
     error SwapRequestAlreadyExecuted();
     error SwapRequestAlreadyRequested();
@@ -536,7 +536,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
             bonsaiRelay.requestCallback(
                 swapImageId,
                 abi.encode(
-                    1,
+                    keccak256(abi.encode(request)),
                     slot0_.sqrtPriceX96,
                     (
                         request.zeroForOne
@@ -560,14 +560,14 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
     }
 
     /// @notice Callback function logic for processing verified journals from Bonsai.
-    function settleSwap(uint64 requestIndex, uint160 sqrt_p, uint256 amount_in, uint256 amount_out, uint256 fee_amount)
+    function settleSwap(bytes32 request_root, uint160 sqrt_p, uint256 amount_in, uint256 amount_out, uint256 fee_amount)
         external
         onlyBonsaiCallback(swapImageId)
         PoolLocked
         RequestHasNotTimedout
         returns (int256 amount0, int256 amount1)
     {
-        if (requestIndex != 1) revert InvalidSwapRequestIndex();
+        if (request_root != keccak256(abi.encode(request))) revert InvalidSwapRequestRoot();
 
         // Caching for gas saving
         Slot0 memory slot0_ = slot0;
