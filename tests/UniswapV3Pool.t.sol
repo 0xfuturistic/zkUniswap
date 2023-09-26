@@ -665,7 +665,52 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
         assertFalse(pool.isPoolLocked());
     }
 
-    function testSwapRequestTimeout() public {}
+    function testSwapRequestTimeout() public {
+        setupPool(
+            PoolParams({
+                balances: [uint256(1 ether), 5000 ether],
+                currentPrice: 5000,
+                liquidity: liquidityRanges(liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000)),
+                transferInMintCallback: true,
+                transferInSwapCallback: true,
+                mintLiqudity: true
+            })
+        );
+
+        uint256 swapAmount = 42 ether; // 42 USDC
+        usdc.mint(address(this), swapAmount);
+        usdc.approve(address(this), swapAmount);
+
+        // Check that we can't timeout a non-existent request
+        vm.expectRevert();
+        pool.timeoutLock();
+
+        // Make a swap request
+        vm.expectCall(address(bonsaiRelay), abi.encodeWithSelector(IBonsaiRelay.requestCallback.selector));
+        pool.requestSwap{value: 100 ether}(
+            address(this), false, swapAmount, sqrtP(5004), encodeExtra(address(weth), address(usdc), address(this))
+        );
+
+        // Check that the pool is locked
+        assertTrue(pool.isPoolLocked());
+
+        // Check that we can't make another swap request
+        vm.expectRevert();
+        pool.requestSwap{value: 100 ether}(
+            address(this), false, swapAmount, sqrtP(5004), encodeExtra(address(weth), address(usdc), address(this))
+        );
+
+        // Check that we can't timeout the request before the timeout
+        vm.expectRevert();
+        pool.timeoutLock();
+
+        // Warp time to after the timeout
+        vm.warp(pool.LOCK_TIMEOUT() + 2);
+
+        pool.timeoutLock();
+
+        assertFalse(pool.isPoolLocked());
+    }
 
     fallback() external payable {}
 
