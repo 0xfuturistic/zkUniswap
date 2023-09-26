@@ -30,6 +30,8 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
         factory = new UniswapV3Factory();
         relayAddress = address(bonsaiRelay);
         swapImageId = queryImageId("SWAP");
+
+        vm.deal(address(this), 10000 ether);
     }
 
     function testInitialize() public {
@@ -622,9 +624,6 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
         // Check that we can't release any locks yet
         vm.expectRevert();
         pool.releaseActiveLock();
-
-        // Acquire lock
-        vm.deal(address(this), 10000 ether);
 
         vm.expectCall(address(bonsaiRelay), abi.encodeWithSelector(IBonsaiRelay.requestCallback.selector));
 
