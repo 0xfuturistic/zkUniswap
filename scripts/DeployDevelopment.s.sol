@@ -47,11 +47,11 @@ contract DeployDevelopment is Script, TestUtils, BonsaiCheats, BonsaiDeploy {
         UniswapV3Quoter quoter = new UniswapV3Quoter(address(factory));
 
         IBonsaiRelay bonsaiRelay = deployBonsaiRelay();
-        relay = address(bonsaiRelay);
+        relayAddress = address(bonsaiRelay);
         uploadImages();
 
-        imageId = queryImageId("SWAP");
-        console.log("Image ID for SWAP is ", vm.toString(imageId));
+        swapImageId = queryImageId("SWAP");
+        console.log("Image ID for SWAP is ", vm.toString(swapImageId));
 
         UniswapV3Pool wethUsdc = deployPool(factory, address(weth), address(usdc), 3000, 5000);
 
