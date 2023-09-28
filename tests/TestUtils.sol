@@ -13,9 +13,11 @@ import "../contracts/UniswapV3Pool.sol";
 import "./ERC20Mintable.sol";
 import "./Assertions.sol";
 
+import "bonsai/IBonsaiRelay.sol";
+
 abstract contract TestUtils is Test, Assertions {
     mapping(uint24 => uint24) internal tickSpacings;
-    address internal relayAddress;
+    IBonsaiRelay internal relay;
     bytes32 internal swapImageId;
 
     constructor() {
@@ -132,7 +134,7 @@ abstract contract TestUtils is Test, Assertions {
         internal
         returns (UniswapV3Pool pool)
     {
-        pool = UniswapV3Pool(factory.createPool(token0, token1, fee, relayAddress, swapImageId));
+        pool = UniswapV3Pool(factory.createPool(token0, token1, fee, address(relay), swapImageId));
         pool.initialize(sqrtP(currentPrice));
     }
 }

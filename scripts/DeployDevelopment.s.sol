@@ -47,7 +47,7 @@ contract DeployDevelopment is Script, TestUtils, BonsaiCheats, BonsaiDeploy {
         UniswapV3Quoter quoter = new UniswapV3Quoter(address(factory));
 
         IBonsaiRelay bonsaiRelay = deployBonsaiRelay();
-        relayAddress = address(bonsaiRelay);
+        relay = bonsaiRelay;
         uploadImages();
 
         swapImageId = queryImageId("SWAP");

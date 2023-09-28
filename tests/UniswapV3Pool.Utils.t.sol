@@ -5,7 +5,9 @@ import "forge-std/Test.sol";
 
 import "./TestUtils.sol";
 
-abstract contract UniswapV3PoolUtils is Test, TestUtils {
+import "bonsai/BonsaiTest.sol";
+
+abstract contract UniswapV3PoolUtils is Test, TestUtils, BonsaiTest {
     struct LiquidityRange {
         int24 lowerTick;
         int24 upperTick;
@@ -32,50 +34,35 @@ abstract contract UniswapV3PoolUtils is Test, TestUtils {
             lowerTick: tick60(lowerPrice),
             upperTick: tick60(upperPrice),
             amount: LiquidityMath.getLiquidityForAmounts(
-                sqrtP(currentPrice),
-                sqrtP60(lowerPrice),
-                sqrtP60(upperPrice),
-                amount0,
-                amount1
-            )
+                sqrtP(currentPrice), sqrtP60(lowerPrice), sqrtP60(upperPrice), amount0, amount1
+                )
         });
     }
 
-    function liquidityRange(
-        uint256 lowerPrice,
-        uint256 upperPrice,
-        uint128 amount
-    ) internal pure returns (LiquidityRange memory range) {
-        range = LiquidityRange({
-            lowerTick: tick60(lowerPrice),
-            upperTick: tick60(upperPrice),
-            amount: amount
-        });
-    }
-
-    function liquidityRanges(LiquidityRange memory range)
+    function liquidityRange(uint256 lowerPrice, uint256 upperPrice, uint128 amount)
         internal
         pure
-        returns (LiquidityRange[] memory ranges)
+        returns (LiquidityRange memory range)
     {
+        range = LiquidityRange({lowerTick: tick60(lowerPrice), upperTick: tick60(upperPrice), amount: amount});
+    }
+
+    function liquidityRanges(LiquidityRange memory range) internal pure returns (LiquidityRange[] memory ranges) {
         ranges = new LiquidityRange[](1);
         ranges[0] = range;
     }
 
-    function liquidityRanges(
-        LiquidityRange memory range1,
-        LiquidityRange memory range2
-    ) internal pure returns (LiquidityRange[] memory ranges) {
+    function liquidityRanges(LiquidityRange memory range1, LiquidityRange memory range2)
+        internal
+        pure
+        returns (LiquidityRange[] memory ranges)
+    {
         ranges = new LiquidityRange[](2);
         ranges[0] = range1;
         ranges[1] = range2;
     }
 
-    function rangeToTicks(LiquidityRange memory range)
-        internal
-        pure
-        returns (ExpectedTickShort[2] memory ticks)
-    {
+    function rangeToTicks(LiquidityRange memory range) internal pure returns (ExpectedTickShort[2] memory ticks) {
         ticks[0] = ExpectedTickShort({
             tick: range.lowerTick,
             initialized: true,

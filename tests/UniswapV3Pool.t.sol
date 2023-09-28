@@ -11,11 +11,7 @@ import "../contracts/lib/TickMath.sol";
 import "../contracts/UniswapV3Factory.sol";
 import "../contracts/UniswapV3Pool.sol";
 
-import {BonsaiTest} from "bonsai/BonsaiTest.sol";
-import {IBonsaiRelay} from "bonsai/IBonsaiRelay.sol";
-import {BonsaiStarter} from "contracts/BonsaiStarter.sol";
-
-contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
+contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
     ERC20Mintable weth;
     ERC20Mintable usdc;
     UniswapV3Factory factory;
@@ -28,7 +24,7 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils, BonsaiTest {
         usdc = new ERC20Mintable("USDC", "USDC", 18);
         weth = new ERC20Mintable("Ether", "ETH", 18);
         factory = new UniswapV3Factory();
-        relayAddress = address(bonsaiRelay);
+        relay = bonsaiRelay;
         swapImageId = queryImageId("SWAP");
 
         vm.deal(address(this), 10000 ether);
