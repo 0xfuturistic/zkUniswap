@@ -21,12 +21,17 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
     bool transferInSwapCallback = true;
     bytes extra;
 
-    function setUp() public {
+    function setUp() public withRelay {
         usdc = new ERC20Mintable("USDC", "USDC", 18);
         weth = new ERC20Mintable("Ether", "ETH", 18);
         factory = new UniswapV3Factory();
 
         extra = encodeExtra(address(weth), address(usdc), address(this));
+
+        relay = bonsaiRelay;
+        swapImageId = queryImageId("SWAP");
+
+        vm.deal(address(this), 10000 ether);
     }
 
     //  One price range
@@ -53,7 +58,11 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         (int256 userBalance0Before, int256 userBalance1Before) =
             (int256(weth.balanceOf(address(this))), int256(usdc.balanceOf(address(this))));
 
-        (int256 amount0Delta, int256 amount1Delta) = pool.swap(address(this), false, swapAmount, sqrtP(5004), extra);
+        pool.requestSwap{value: 100 ether}(address(this), false, swapAmount, sqrtP(5004), extra);
+
+        runPendingCallbackRequest();
+
+        (int256 amount0Delta, int256 amount1Delta) = (pool.cache_lastAmount0(), pool.cache_lastAmount1());
 
         assertEq(amount0Delta, -0.008371593947078467 ether, "invalid ETH out");
         assertEq(amount1Delta, 42 ether, "invalid USDC in");
@@ -111,7 +120,11 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         (int256 userBalance0Before, int256 userBalance1Before) =
             (int256(weth.balanceOf(address(this))), int256(usdc.balanceOf(address(this))));
 
-        (int256 amount0Delta, int256 amount1Delta) = pool.swap(address(this), false, swapAmount, sqrtP(5002), extra);
+        pool.requestSwap{value: 100 ether}(address(this), false, swapAmount, sqrtP(5002), extra);
+
+        runPendingCallbackRequest();
+
+        (int256 amount0Delta, int256 amount1Delta) = (pool.cache_lastAmount0(), pool.cache_lastAmount1());
 
         assertEq(amount0Delta, -0.008373196666644048 ether, "invalid ETH out");
         assertEq(amount1Delta, 42 ether, "invalid USDC in");
@@ -186,7 +199,11 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         (int256 userBalance0Before, int256 userBalance1Before) =
             (int256(weth.balanceOf(address(this))), int256(usdc.balanceOf(address(this))));
 
-        (int256 amount0Delta, int256 amount1Delta) = pool.swap(address(this), false, swapAmount, sqrtP(6106), extra);
+        pool.requestSwap{value: 100 ether}(address(this), false, swapAmount, sqrtP(6106), extra);
+
+        runPendingCallbackRequest();
+
+        (int256 amount0Delta, int256 amount1Delta) = (pool.cache_lastAmount0(), pool.cache_lastAmount1());
 
         assertEq(amount0Delta, -1.806151062659754714 ether, "invalid ETH out");
         assertEq(amount1Delta, 9938.146841864722991247 ether, "invalid USDC in");
@@ -297,7 +314,11 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         (int256 userBalance0Before, int256 userBalance1Before) =
             (int256(weth.balanceOf(address(this))), int256(usdc.balanceOf(address(this))));
 
-        (int256 amount0Delta, int256 amount1Delta) = pool.swap(address(this), false, swapAmount, sqrtP(6056), extra);
+        pool.requestSwap{value: 100 ether}(address(this), false, swapAmount, sqrtP(6056), extra);
+
+        runPendingCallbackRequest();
+
+        (int256 amount0Delta, int256 amount1Delta) = (pool.cache_lastAmount0(), pool.cache_lastAmount1());
 
         assertEq(amount0Delta, -1.846400936777913632 ether, "invalid ETH out");
         assertEq(amount1Delta, 9932.742771767366603035 ether, "invalid USDC in");
@@ -400,7 +421,11 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         (int256 userBalance0Before, int256 userBalance1Before) =
             (int256(weth.balanceOf(address(this))), int256(usdc.balanceOf(address(this))));
 
-        (int256 amount0Delta, int256 amount1Delta) = pool.swap(address(this), false, swapAmount, sqrtP(5003), extra);
+        pool.requestSwap{value: 100 ether}(address(this), false, swapAmount, sqrtP(5003), extra);
+
+        runPendingCallbackRequest();
+
+        (int256 amount0Delta, int256 amount1Delta) = (pool.cache_lastAmount0(), pool.cache_lastAmount1());
 
         assertEq(amount0Delta, -0.006557492291469845 ether, "invalid ETH out");
         assertEq(amount1Delta, 32.895984173313069971 ether, "invalid USDC in");
@@ -456,7 +481,11 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         (int256 userBalance0Before, int256 userBalance1Before) =
             (int256(weth.balanceOf(address(this))), int256(usdc.balanceOf(address(this))));
 
-        (int256 amount0Delta, int256 amount1Delta) = pool.swap(address(this), true, swapAmount, sqrtP(4993), extra);
+        pool.requestSwap{value: 100 ether}(address(this), true, swapAmount, sqrtP(4993), extra);
+
+        runPendingCallbackRequest();
+
+        (int256 amount0Delta, int256 amount1Delta) = (pool.cache_lastAmount0(), pool.cache_lastAmount1());
 
         assertEq(amount0Delta, 0.01337 ether, "invalid ETH out");
         assertEq(amount1Delta, -66.608848079558229697 ether, "invalid USDC in");
@@ -514,7 +543,11 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         (int256 userBalance0Before, int256 userBalance1Before) =
             (int256(weth.balanceOf(address(this))), int256(usdc.balanceOf(address(this))));
 
-        (int256 amount0Delta, int256 amount1Delta) = pool.swap(address(this), true, swapAmount, sqrtP(4996), extra);
+        pool.requestSwap{value: 100 ether}(address(this), true, swapAmount, sqrtP(4996), extra);
+
+        runPendingCallbackRequest();
+
+        (int256 amount0Delta, int256 amount1Delta) = (pool.cache_lastAmount0(), pool.cache_lastAmount1());
 
         assertEq(amount0Delta, 0.01337 ether, "invalid ETH out");
         assertEq(amount1Delta, -66.629142854363394712 ether, "invalid USDC in");
@@ -589,7 +622,11 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         (int256 userBalance0Before, int256 userBalance1Before) =
             (int256(weth.balanceOf(address(this))), int256(usdc.balanceOf(address(this))));
 
-        (int256 amount0Delta, int256 amount1Delta) = pool.swap(address(this), true, swapAmount, sqrtP(4094), extra);
+        pool.requestSwap{value: 100 ether}(address(this), true, swapAmount, sqrtP(4094), extra);
+
+        runPendingCallbackRequest();
+
+        (int256 amount0Delta, int256 amount1Delta) = (pool.cache_lastAmount0(), pool.cache_lastAmount1());
 
         assertEq(amount0Delta, 1.992510070712824953 ether, "invalid ETH out");
         assertEq(amount1Delta, -9052.445703934334276104 ether, "invalid USDC in");
@@ -700,7 +737,11 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         (int256 userBalance0Before, int256 userBalance1Before) =
             (int256(weth.balanceOf(address(this))), int256(usdc.balanceOf(address(this))));
 
-        (int256 amount0Delta, int256 amount1Delta) = pool.swap(address(this), true, swapAmount, sqrtP(4128), extra);
+        pool.requestSwap{value: 100 ether}(address(this), true, swapAmount, sqrtP(4128), extra);
+
+        runPendingCallbackRequest();
+
+        (int256 amount0Delta, int256 amount1Delta) = (pool.cache_lastAmount0(), pool.cache_lastAmount1());
 
         assertEq(amount0Delta, 1.996627649722534946 ether, "invalid ETH out");
         assertEq(amount1Delta, -9282.88654631058073934 ether, "invalid USDC in");
@@ -803,7 +844,11 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         (int256 userBalance0Before, int256 userBalance1Before) =
             (int256(weth.balanceOf(address(this))), int256(usdc.balanceOf(address(this))));
 
-        (int256 amount0Delta, int256 amount1Delta) = pool.swap(address(this), true, swapAmount, sqrtP(4994), extra);
+        pool.requestSwap{value: 100 ether}(address(this), true, swapAmount, sqrtP(4994), extra);
+
+        runPendingCallbackRequest();
+
+        (int256 amount0Delta, int256 amount1Delta) = (pool.cache_lastAmount0(), pool.cache_lastAmount1());
 
         assertEq(amount0Delta, 0.013172223319600129 ether, "invalid ETH out");
         assertEq(amount1Delta, -65.624123301724744141 ether, "invalid USDC in");
@@ -835,7 +880,7 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         );
     }
 
-    function testSwapBuyEthNotEnoughLiquidity() public {
+    function testFail_SwapBuyEthNotEnoughLiquidity() public {
         LiquidityRange[] memory liquidity = new LiquidityRange[](1);
         liquidity[0] = liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000);
         PoolParams memory params = PoolParams({
@@ -852,11 +897,11 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         usdc.mint(address(this), swapAmount);
         usdc.approve(address(this), swapAmount);
 
-        vm.expectRevert(encodeError("NotEnoughLiquidity()"));
-        pool.swap(address(this), false, swapAmount, sqrtP(6000), extra);
+        pool.requestSwap{value: 100 ether}(address(this), false, swapAmount, sqrtP(6000), extra);
+        runPendingCallbackRequest();
     }
 
-    function testSwapBuyUSDCNotEnoughLiquidity() public {
+    function testFail_SwapBuyUSDCNotEnoughLiquidity() public {
         LiquidityRange[] memory liquidity = new LiquidityRange[](1);
         liquidity[0] = liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000);
         PoolParams memory params = PoolParams({
@@ -873,8 +918,8 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         weth.mint(address(this), swapAmount);
         weth.approve(address(this), swapAmount);
 
-        vm.expectRevert(encodeError("NotEnoughLiquidity()"));
-        pool.swap(address(this), true, swapAmount, sqrtP(4000), extra);
+        pool.requestSwap{value: 100 ether}(address(this), true, swapAmount, sqrtP(4000), extra);
+        runPendingCallbackRequest();
     }
 
     function testSwapMixed() public {
@@ -902,10 +947,14 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         userBalances[1] = int256(usdc.balanceOf(address(this)));
 
         int256[] memory amountsDelta1 = new int256[](2);
-        (amountsDelta1[0], amountsDelta1[1]) = pool.swap(address(this), true, ethAmount, sqrtP(4993), extra);
+        pool.requestSwap{value: 100 ether}(address(this), true, ethAmount, sqrtP(4993), extra);
+        runPendingCallbackRequest();
+        (amountsDelta1[0], amountsDelta1[1]) = (pool.cache_lastAmount0(), pool.cache_lastAmount1());
 
         int256[] memory amountsDelta2 = new int256[](2);
-        (amountsDelta2[0], amountsDelta2[1]) = pool.swap(address(this), false, usdcAmount, sqrtP(5004), extra);
+        pool.requestSwap{value: 200 ether}(address(this), false, usdcAmount, sqrtP(5004), extra);
+        runPendingCallbackRequest();
+        (amountsDelta2[0], amountsDelta2[1]) = (pool.cache_lastAmount0(), pool.cache_lastAmount1());
 
         LiquidityRange memory liq = liquidity[0];
         assertMany(
@@ -940,7 +989,7 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         );
     }
 
-    function testSwapInsufficientInputAmount() public {
+    function testFail_SwapInsufficientInputAmount() public {
         LiquidityRange[] memory liquidity = new LiquidityRange[](1);
         liquidity[0] = liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000);
         PoolParams memory params = PoolParams({
@@ -953,8 +1002,8 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         });
         setupPool(params);
 
-        vm.expectRevert(encodeError("InsufficientInputAmount()"));
-        pool.swap(address(this), false, 42 ether, sqrtP(5004), "");
+        pool.requestSwap{value: 100 ether}(address(this), false, 42 ether, sqrtP(5004), "");
+        runPendingCallbackRequest();
     }
 
     function testObservations() public {
@@ -983,7 +1032,8 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
 
         (, int24 tickBeforeSwap,,,) = pool.slot0();
         int56 tickCumulative = tickBeforeSwap * 0;
-        pool.swap(address(this), false, swapAmount, sqrtP(6000), extra);
+        pool.requestSwap{value: 100 ether}(address(this), false, swapAmount, sqrtP(6000), extra);
+        runPendingCallbackRequest();
         assertObservation(
             ExpectedObservation({pool: pool, index: 0, timestamp: 1, tickCumulative: tickCumulative, initialized: true})
         );
@@ -991,7 +1041,8 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         vm.warp(7);
         (, tickBeforeSwap,,,) = pool.slot0();
         tickCumulative += tickBeforeSwap * (7 - 1);
-        pool.swap(address(this), true, swapAmount2, sqrtP(4000), extra);
+        pool.requestSwap{value: 200 ether}(address(this), true, swapAmount2, sqrtP(4000), extra);
+        runPendingCallbackRequest();
         assertObservation(
             ExpectedObservation({pool: pool, index: 0, timestamp: 7, tickCumulative: tickCumulative, initialized: true})
         );
@@ -999,7 +1050,8 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         vm.warp(20);
         (, tickBeforeSwap,,,) = pool.slot0();
         tickCumulative += tickBeforeSwap * (20 - 7);
-        pool.swap(address(this), false, swapAmount, sqrtP(6000), extra);
+        pool.requestSwap{value: 300 ether}(address(this), false, swapAmount, sqrtP(6000), extra);
+        runPendingCallbackRequest();
         assertObservation(
             ExpectedObservation({pool: pool, index: 0, timestamp: 20, tickCumulative: tickCumulative, initialized: true})
         );
@@ -1029,13 +1081,16 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         weth.approve(address(this), swapAmount2 * 10);
 
         vm.warp(2);
-        pool.swap(address(this), false, swapAmount, sqrtP(6000), extra);
+        pool.requestSwap{value: 100 ether}(address(this), false, swapAmount, sqrtP(6000), extra);
+        runPendingCallbackRequest();
 
         vm.warp(7);
-        pool.swap(address(this), true, swapAmount2, sqrtP(4000), extra);
+        pool.requestSwap{value: 200 ether}(address(this), true, swapAmount2, sqrtP(4000), extra);
+        runPendingCallbackRequest();
 
         vm.warp(20);
-        pool.swap(address(this), false, swapAmount, sqrtP(6000), extra);
+        pool.requestSwap{value: 300 ether}(address(this), false, swapAmount, sqrtP(6000), extra);
+        runPendingCallbackRequest();
 
         secondsAgos = new uint32[](4);
         secondsAgos[0] = 0;
@@ -1138,4 +1193,8 @@ contract UniswapV3PoolSwapsTest is Test, UniswapV3PoolUtils {
         transferInSwapCallback = params.transferInSwapCallback;
         liquidity = params.liquidity;
     }
+
+    fallback() external payable {}
+
+    receive() external payable {}
 }
