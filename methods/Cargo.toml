@@ -12,3 +12,8 @@ risc0-build = { workspace = true, features = ["guest-list"] }
 [dependencies]
 risc0-build = { workspace = true, features = ["guest-list"] }
 risc0-zkvm = { workspace = true }
+
+[features]
+cuda = ["risc0-zkvm/cuda"]
+default = []
+metal = ["risc0-zkvm/metal"]
