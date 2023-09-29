@@ -95,6 +95,17 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
         int24 tick
     );
 
+    event SettleSwap(
+        address indexed sender,
+        address indexed recipient,
+        int256 amount0,
+        int256 amount1,
+        uint160 sqrtPriceX96,
+        uint128 liquidity,
+        int24 tick,
+        uint256 cycles_used
+    );
+
     /// @notice Address of the Bonsai relay contract.
     address public relay;
 
@@ -560,7 +571,14 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
     }
 
     /// @notice Callback function logic for processing verified journals from Bonsai.
-    function settleSwap(bytes32 request_root, uint160 sqrt_p, uint256 amount_in, uint256 amount_out, uint256 fee_amount)
+    function settleSwap(
+        bytes32 request_root,
+        uint160 sqrt_p,
+        uint256 amount_in,
+        uint256 amount_out,
+        uint256 fee_amount,
+        uint256 cycles_used
+    )
         external
         onlyBonsaiCallback(swapImageId)
         PoolLocked
@@ -675,7 +693,16 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
             }
         }
 
-        emit Swap(request.sender, request.recipient, amount0, amount1, slot0.sqrtPriceX96, state.liquidity, slot0.tick);
+        emit SettleSwap(
+            request.sender,
+            request.recipient,
+            amount0,
+            amount1,
+            slot0.sqrtPriceX96,
+            state.liquidity,
+            slot0.tick,
+            cycles_used
+        );
 
         _unlockPool();
 
