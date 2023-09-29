@@ -167,7 +167,7 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
     int256 public cache_lastAmount0;
     int256 public cache_lastAmount1;
 
-    uint256 public totalSold; // The total number of locks sold so far.
+    uint256 public locksSold; // The total number of locks sold so far.
 
     uint256 public immutable startTime = block.timestamp; // When VRGDA sales begun.
 
@@ -516,10 +516,10 @@ contract UniswapV3Pool is IUniswapV3Pool, BonsaiCallbackReceiver, LinearVRGDA {
         uint256 amountSpecified,
         uint160 sqrtPriceLimitX96,
         bytes calldata data
-    ) public payable PoolNotLocked returns (uint256 mintedId) {
+    ) public payable PoolNotLocked returns (uint256 lockId) {
         unchecked {
             // Note: By using toDaysWadUnsafe(block.timestamp - startTime) we are establishing that 1 "unit of time" is 1 day.
-            uint256 price = getVRGDAPrice(toDaysWadUnsafe(block.timestamp - startTime), mintedId = totalSold++);
+            uint256 price = getVRGDAPrice(toDaysWadUnsafe(block.timestamp - startTime), lockId = locksSold++);
 
             require(msg.value >= price, "UNDERPAID"); // Don't allow underpaying.
 
