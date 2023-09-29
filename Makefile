@@ -1,6 +1,9 @@
 .PHONY: test
 
 deploy:
+	RISC0_DEV_MODE=false forge script scripts/DeployDevelopment.s.sol --broadcast --fork-url $$ETH_RPC_URL --private-key $$PRIVATE_KEY
+
+deploy-dev:
 	RISC0_DEV_MODE=true forge script scripts/DeployDevelopment.s.sol --broadcast --fork-url $$ETH_RPC_URL --private-key $$PRIVATE_KEY
 
 update-abis:
