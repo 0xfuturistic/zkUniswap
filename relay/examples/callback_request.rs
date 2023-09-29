@@ -15,7 +15,11 @@
 use anyhow::Context;
 use bonsai_ethereum_relay::sdk::client::{CallbackRequest, Client};
 use clap::Parser;
-use ethers::{abi::ethabi, types::Address};
+use ethabi::{ethereum_types::U256, FixedBytes, Token};
+use ethers::{
+    abi::ethabi,
+    types::{Address, I256},
+};
 use methods::SWAP_ID;
 use risc0_zkvm::sha::Digest;
 
@@ -28,8 +32,13 @@ struct Args {
     /// Adress for the BonsaiStarter application contract.
     address: Address,
 
-    /// Input N for calculating the Nth Fibonacci number.
-    number: u64,
+    /// Inputs
+    request_root: FixedBytes,
+    price: U256,
+    price_target: U256,
+    liquidity: u128,
+    amount: I256,
+    fee: u32,
 
     /// Bonsai Relay API URL.
     #[arg(long, env, default_value = "http://localhost:8080")]
@@ -51,8 +60,15 @@ async fn main() -> anyhow::Result<()> {
     )
     .context("Failed to initialize the relay client")?;
 
-    // Initialize the input for the FIBONACCI guest.
-    let input = ethabi::encode(&[ethers::abi::Token::Uint(args.number.into())]);
+    // Initialize the input for the SWAP guest.
+    let input = ethabi::encode(&[
+        Token::FixedBytes(args.request_root.into()),
+        Token::Uint(args.price.into()),
+        Token::Uint(args.price_target.into()),
+        Token::Uint(args.liquidity.into()),
+        Token::Int(args.amount.into_raw()),
+        Token::Uint(args.fee.into()),
+    ]);
 
     // Create a CallbackRequest for your contract
     // example: (contracts/BonsaiStarter.sol).
@@ -60,7 +76,7 @@ async fn main() -> anyhow::Result<()> {
         callback_contract: args.address,
         // you can use the command `solc --hashes contracts/BonsaiStarter.sol`
         // to get the value for your actual contract (9f2275c0: storeResult(uint256,uint256))
-        function_selector: [0x9f, 0x22, 0x75, 0xc0],
+        function_selector: [0x9f, 0x22, 0x75, 0xc0], // TODO: replace with selector
         gas_limit: 3000000,
         image_id: Digest::from(SWAP_ID).into(),
         input,
