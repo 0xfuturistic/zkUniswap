@@ -1,283 +1,168 @@
-# Bonsai Foundry Template
+# zkUniswap: exploring zkAMMs
 
-Starter template for writing an application using [Bonsai].
+<aside>
+📀 TL;DR: We introduce zkUniswap, a first-of-its-kind zkAMM that uses a zk co-processor to offload the computation of swaps.
 
-This repository implements an application on Ethereum utilizing Bonsai as a [coprocessor] to the smart contract application.
-It provides a starting point for building powerful new applications on Ethereum that offload computationally intensive, or difficult to implement, tasks to be proven by the [RISC Zero] [zkVM], with verifiable results sent to your Ethereum contract.
+</aside>
 
-*For a 60 second overview of how this template and off-chain computation with Bonsai work, [check out the video here](https://www.youtube.com/watch?v=WDS8X8H9mIk).*
+## What is *zkUniswap*?
 
-## Quick Start
-First, [install Rust] and [Foundry], and then restart your terminal. Next, you will need to install the `cargo risczero tool`:
+zkUniswap is a research proof-of-concept of a fork of UniswapV3 that uses a zkVM (RISC Zero’s) to compute part of the swap off-chain. When a user starts a swap, a swap request is made on-chain. This request is picked up by a relay that makes the computation off-chain and then posts the output (and a corresponding proof) to a callback function in the EVM. If the proof is valid, the step is executed and the request is effectively fulfilled.
 
-```bash
-cargo install cargo-risczero
+> You can check out the code on [GitHub](https://github.com/0xfuturistic/zkUniswap) and interact with the smart contracts today, which are live on Sepolia and Goerli at these addresses.
+> 
+
+## What is the *swap step*?
+
+The swap step sits at the core of the execution of a swap. To paraphrase the [documentation](https://github.com/Uniswap/v3-core/blob/main/contracts/libraries/SwapMath.sol#L10) in the codebase, the swap step outputs the following:
+
+1. The price after swapping the amount in/out
+2. The amount to be swapped in
+3. The amount to be received
+4. The amount of input that will be taken as a fee
+
+Concretely, the step computed by the [swap](https://github.com/Uniswap/v3-core/blob/main/contracts/UniswapV3Pool.sol#L596) function in [UniswapV3Pool](https://github.com/Uniswap/v3-core/blob/main/contracts/UniswapV3Pool.sol): 
+
+```solidity
+/// simplified for demonstration purposes
+contract UniswapV3Pool {
+		function swap(
+		    address recipient,
+		    bool zeroForOne,
+		    int256 amountSpecified,
+		    uint160 sqrtPriceLimitX96,
+		    bytes calldata data
+		) {
+				[...]
+				(
+					state.sqrtPriceX96,
+					step.amountIn,
+					step.amountOut,
+					step.feeAmount
+				) = SwapMath.computeSwapStep(
+				    state.sqrtPriceX96,
+				    (zeroForOne ? step.sqrtPriceNextX96 < sqrtPriceLimitX96 : step.sqrtPriceNextX96 > sqrtPriceLimitX96)
+				        ? sqrtPriceLimitX96
+				        : step.sqrtPriceNextX96,
+				    state.liquidity,
+				    state.amountSpecifiedRemaining,
+				    fee
+				);
+				[...]
+		}
+}
 ```
 
-For the above commands to build successfully you will need to have installed the required dependencies. On a Ubuntu system you can install them with:
+The logic is implemented by one of the specialized libraries, [SwapMath](https://github.com/Uniswap/v3-core/blob/main/contracts/libraries/SwapMath.sol).
 
-```bash
-sudo apt install curl build-essential libssl-dev pkgconf
+## What are *zkAMMs*?
+
+zkAMMs are a variant of Automated Market Makers (AMMs) that integrate zero-knowledge proofs *in-protocol*. This may be done by leveraging a zk co-processor to offload the computation of the swap step, as is the case discussed here. It’s worth noting that, unlike an AMM on a zk-rollup, the verification of the proof is done *by the protocol itself,* allowing it to exist in a medium that does not use zero-knowledge proofs (such as Ethereum Mainnet).
+
+# Technical Blueprint
+
+## Off-chain zk Co-processor
+
+zkUniswap effectively leverages a zk co-processor to carry out the swap step. The protocol uses a zkVM (RISCZero’s) to run the step as the guest program. The program, written in Rust, and which you can find [here](https://github.com/0xfuturistic/zkUniswap/blob/main/methods/guest/src/bin/swap.rs), uses a [Uniswap V3 math library](https://github.com/0xKitsune/uniswap-v3-math/). The zkVM’s prover produces a [receipt](https://dev.risczero.com/terminology#receipt), which includes a journal (where the outputs of the step are committed to) and a seal, which is a zk-STARK. This receipt is used to verify that the step program was executed correctly for the outputs in the journal.
+
+## On-chain Swap Request and Settlement
+
+A user starts a swap by making a request on-chain, which they do by calling [requestSwap](https://github.com/0xfuturistic/zkUniswap/blob/main/contracts/UniswapV3Pool.sol#L513). They pass the same inputs they’d pass to `swap`. The relay, Bonsai, in this case, picks up the request and computes the step off-chain. The relay then posts the data including the outputs and the proof to the function `invokeCallback`. This function verifies the proof, and if it’s considered valid, the callback function that executes the step is called, namely `settleSwap`.
+
+### **Proof Verification**
+
+To make the verification on-chain realistic, a STARK-to-SNARK wrapper is used, such that the zk-STARK of the seal is verified inside a Groth16 prover. This Groth16 verifier, written in Solidity, allows for verifying the proofs on-chain and is used by `invokeCallback`.
+
+## Concurrency Control
+
+Since the swap is non-atomic, because the request and the execution are made in different transactions since the proving doesn’t happen in the EVM, there’s a risk that the state of the pool changes after the request has been made and before the swap has been executed. This would be highly problematic since the proof is made for the state of the pool at the time the request was made. Thus, if another operation is made on the pool that updates it while a request is pending, the proof to be posted is invalidated.
+
+To prevent these issues, a lock is put on the pool by `requestSwap`, and all operations but `settleSwap` are blocked if a lock is active. This prevents the state of the pool from changing while the swap is in process. The lock is lifted by `settleSwap`, if the callback is successfully called, or it is timed out if the swap hasn’t been completed before a predetermined amount of time went by, defined by `LOCK_TIMEOUT`. Thus, if the relay fails, by becoming unresponsive or posting invalid proofs, the pool is not locked forever.
+
+### Lock Auctioning
+
+Users compete with each other to be able to lock the pool, since a pool can only hold one lock at a time. The first transaction calling `requestSwap` is the one that locks it, and the other ones have to wait for the swap to be settled or for the lock to time out. Since transactions can be reordered by builders, users are likely to want to pay them to include their transactions first. This means that value would be lost to MEV.
+
+zkUniswap, however, takes a different path by auctioning these locks using a Variable Rate Gradual Dutch Auction (VRGDA). This allows the protocol to capture that value by auctioning off the locks directly. Furthermore, these locks are auctioned on a schedule, so that the protocol maximizes the time the pool is locked for. If the sales are ahead of schedule, the protocol recognizes this surge in quantity demanded and automatically updates the price to reflect that. Likewise, if sales are lagging, the protocol lowers the price in order to match the quantity demanded. All in all, this proves to be another source of revenue for the protocol.
+
+The auction is carried out by the pool smart contract expecting a transfer of ETH in the calls made to `requestSwap` for at least the price of the lock. If more than necessary ETH is provided, the surplus is atomically returned to the user at the end of the call.
+
+## Swap Flow
+
+We have that interactions with the relay are dealt with on-chain using the BonsaiRelay smart contract, which is the gateway from which the relay picks up callback requests and eventually posts data to `invokeCallback`:
+
+```mermaid
+sequenceDiagram
+		participant User
+		participant UniswapV3Pool
+		participant BonsaiRelay
+		participant Relay
+
+		User->>UniswapV3Pool: requestSwap
+		break pool already locked
+			UniswapV3Pool->>UniswapV3Pool: revert
+		end
+		break not enough paid
+			UniswapV3Pool->>UniswapV3Pool: revert
+		end
+		UniswapV3Pool->>UniswapV3Pool: lock
+		UniswapV3Pool->>BonsaiRelay: requestCallback
+		BonsaiRelay->>BonsaiRelay: emit event
+		BonsaiRelay->>Relay: pick up event
+		Relay->>Relay: compute step
+		note over Relay: obtain receipt
+		Relay->>BonsaiRelay: invokeCallback
+		break verification failed
+			BonsaiRelay->>BonsaiRelay: revert
+		end
+		BonsaiRelay->>UniswapV3Pool: call callback
+		break lock timed out
+			UniswapV3Pool->>UniswapV3Pool: revert
+			note over User: anyone can time out lock
+			User->>UniswapV3Pool: timeoutLock
+			UniswapV3Pool->>UniswapV3Pool: unlock
+		end
+		UniswapV3Pool->>UniswapV3Pool: execute step
+		UniswapV3Pool->>UniswapV3Pool: unlock
+		UniswapV3Pool->>User: return surplus payment
+		
 ```
 
-Next we'll need to install the `risc0` toolchain with:
+It’s worth mentioning that the pool can be timed out at any valid point, not necessarily just at the point illustrated in the diagram above.
 
-```bash
-cargo risczero install
-```
+## **Performance Metrics**
 
-Now, you can initialize a new Bonsai project at a location of your choosing: 
+The program in the zkVM takes roughly ~154720 cycles. The average amount of gas consumed by `requestSwap` is ~194453 (worst ~254534) and by `settleSwap` is ~64729 (worst ~99998). For reference, an unaltered `swap` call uses about ~71789 (worst ~111999) gas.
 
-```bash
-forge init -t risc0/bonsai-foundry-template ./my-project
-```
-Congratulations! You've just built your first Bonsai project.
-Your new project consists of:
-- a [`zkVM program`] (written in Rust), which specifies a computation that will be proven
-- a [`contract`] (written in Solidity), which requests a proof and receives the response
+# **Looking Ahead**
 
-[install Rust]: https://doc.rust-lang.org/cargo/getting-started/installation.html
-[Foundry]: https://getfoundry.sh/
-[`zkVM program`]: https://github.com/risc0/bonsai-foundry-template/tree/main/methods/guest/src/bin
-[`contract`]: https://github.com/risc0/bonsai-foundry-template/tree/main/contracts
+This research proof-of-concept is unlikely to see any meaningful adoption because the benefits it provides to users are fairly limited. However, there are several ways this design could be improved upon. It’s worth mentioning that these approaches extend for zkAMMs more generally.
 
-### Test Your Project
-- Use `cargo build` to test compilation of your zkVM program.
-- Use `cargo test` to run the tests in your zkVM program. 
-- Use `forge test` to test your Solidity contracts and their interaction with your zkVM program.
+## Swap **Parallelization**
 
-### Deploy your project on a local network
+[Continuations](https://www.risczero.com/news/continuations) could be used to parallelize swaps. Concretely, they allow the [execution trace for a single session of the zkVM to be split into a number of segments, each independently proved](https://dev.risczero.com/terminology#continuations). Swaps with paths independent from each other can each be represented by a [segment](https://dev.risczero.com/terminology#segment) in the zkVM and then these segments could be proven in parallel as part of the broader [session](https://dev.risczero.com/terminology#session). This allows for parallelization of the proving step for a batch of swaps.
 
-You can deploy your contracts and run an end-to-end test or demo as follows:
+Let $n$ be the number of swaps in the batch, $C_{\text{AMM}}$ be the computational cost of traditional AMMs, and  $C_{\text{zkAMM}}$  be the computational cost of zkAMMs. Our hypothesis states that
 
-1. Start a local testnet with `anvil` by running:
+$$
+C_{\text{zkAMM}}=O(\frac{C_{\text{AMM}}}{n})
+$$
 
-    ```bash
-    anvil
-    ```
+In essence, the execution of the swaps could be done on-chain in series, but the computation of the actual swap steps would be done in parallel off-chain using this approach. This allows for parallelization of the heaviest part for batches in a way that is not possible natively in the EVM.
 
-    Once anvil is started, keep it running in the terminal, and switch to a new terminal.
+## Differential Privacy
 
-2. Deploy an `IBonsaiRelay` contract by running:
+This instantiation of a zkAMM is not private. For that, [we’d need some sort of noise](https://twitter.com/tarunchitra/status/1702840409624305800). While out of the scope of this article, it’s worth pointing out that differential privacy could be achieved by leveraging a privacy-enhancing mechanism like Uniform Random Execution, as outlined [in this paper](https://eprint.iacr.org/2021/1101.pdf).
 
-    ```bash
-    RISC0_DEV_MODE=true forge script script/Deploy.s.sol --rpc-url http://localhost:8545 --broadcast
-    ```
+## Cheap or Gasless Requests
 
-3. Check the logs for the address of the deployed `BonsaiTestRelay` contract and your application contract.
-   Save them to a couple of environment variables to reference later.
+An idea from [William X](https://twitter.com/W_Y_X) is for requests to be propagated on a cheaper, alternative data availability layer (such as on a rollup) than the one used by the relay to fulfill requests or where the AMM lives. This has the potential to reduce costs for making requests.
 
-    ```bash
-    export BONSAI_RELAY_ADDRESS="#copy relay address from the deploy logs#"
-    export APP_ADDRESS="#copy app address from the deploy logs#"
-    ```
+Another possibility is for users to make requests by producing an EIP712 signature that they propagate off-chain. The relay can then provide this signature while fulfilling the request on-chain. It could then be possible to achieve gasless requests for swaps.
 
-4. Start the Bonsai Ethereum Relay by running:
+## Future Work
 
-    ```bash
-    RISC0_DEV_MODE=true cargo run --bin bonsai-ethereum-relay-cli -- run --relay-address "$BONSAI_RELAY_ADDRESS"
-    ```
-
-    The relay will keep monitoring the chain for callback requests, generated when your contract calls `bonsaiRelay.requestCallback(...)`, and relay their result back to your contract after computing them.
-    Keep the relay running and switch to a new terminal.
-
-    Setting `RISC0_DEV_MODE=true` deploys the `BonsaiTestRelay`, for use in local development and testing, instead of the fully verifying `BonsaiRelay` contract.
-    See the section below on using the fully-verifying relay for more information on this setting and testnet deployment.
-
-**Interact with your deployment:**
-
-You now have a locally running testnet and relay deployment that you can interact with using `cast`, a wallet, or any application you write.
-
-1. Send a transaction to the starter contract:
-
-    ```bash
-    cast send --private-key 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d --gas-limit 100000 "$APP_ADDRESS" 'calculateFibonacci(uint256)' 5
-    ```
-
-2. Check the relayed result:
-
-    ```bash
-    cast call "$APP_ADDRESS" 'fibonacci(uint256)' 5
-    ```
-
-**Deploy a new version of your application:**
-
-When you want to deploy a new version of the application contract, run the following command with the relay contract address noted earlier.
-Set `DEPLOY_UPLOAD_IMAGES=true` if you modified your guest and need to upload a new version to Bonsai.
-
-```bash
-RISC0_DEV_MODE=true DEPLOY_RELAY_ADDRESS="$APP_ADDRESS" DEPLOY_UPLOAD_IMAGES=true forge script script/Deploy.s.sol --rpc-url http://localhost:8545 --broadcast
-```
-
-This will deploy only your application address and upload any updated images.
-The existing relay contract and, by setting `DEPLOY_RELAY_ADDRESS`, the running relay will continue to be used.
-
-**Use the fully verifying relay:**
-
-In each of the commands above, the environment variable `RISC0_DEV_MODE=true` is added.
-With this environment variable set, the `BonsaiTestRelay` contract is used, which does not check callbacks for authentication.
-This provides fast development, allowing you to iterate on your application.
-
-When it's time to deploy you application to a live chain, such as the Sepolia testnet, you should remove this environment or set `RISC0_DEV_MODE=false`.
-When unset, or set to `false`, the fully-verifying `BonsaiRelay` contract will be used and all callbacks will require a [Groth16 SNARK proof] for authentication.
-This is what provides the security guarantees of Bonsai, that only legitimate outputs from your guest program can be sent to your application contract.
-
-Producing SNARK receipts that are verifiable on-chain requires the Bonsai proving service.
-See the [Configuring Bonsai](#Configuring Bonsai) section below for more information about using the Bonsai proving service.
-
-You can also deploy on a testnet by following the instructions described in [Deploy your project on a testnet](#deploy-your-project-on-a-testnet).
-If you want to know more about the relay, you can follow this [link](https://github.com/risc0/risc0/tree/main/bonsai/ethereum-relay).
-
-### Off-chain Callback Request
-
-The Relay exposes an HTTP REST API interface that can be used to directly send *off-chain* callback requests to it, as an alternative to the on-chain requests.
-It also provides an SDK in Rust that can be used to interact with it. You can check out this [example](relay/examples/callback_request.rs.rs).
-
-Assuming that Anvil and the Relay are running and both an `IBonsaiRelay` and the `BonsaiStarter` app contract are deployed (first 4 steps of the previous section), you can send a callback request directly to the Relay by running:
-
-```bash
-cargo run --example callback_request "$APP_ADDRESS" 10
-```
-
-This example's arguments are the `BonsaiStarter` contract address and the number, N, to compute the Nth Fibonacci number.
-You may need to change these values accordingly.
-
-Just as with on-chain callback requests, you can check the relayed result
-
-```bash
-cast call "$APP_ADDRESS" 'fibonacci(uint256)' 10
-```
-
-The Relay source code with its SDK can be found in the [risc0/risc0] github repo.
-
-### Configuring Bonsai
-
-***Note:*** *The Bonsai proving service is still in early Alpha. To request an API key [complete the form here](https://bonsai.xyz/apply).*
-
-With the Bonsai proving service, you can produce a [Groth16 SNARK proof] that is verifiable on-chain.
-You can get started by setting the following environment variables with your API key and associated URL.
-
-```bash
-export BONSAI_API_KEY="YOUR_API_KEY" # see form linked above
-export BONSAI_API_URL="BONSAI_URL" # provided with your api key
-```
-
-Now if you run `forge test` with `RISC0_DEV_MODE=false`, the test will run as before, but will additionally use the fully verifying `BonsaiRelay` contract instead of `BonsaiTestRelay` and will request a SNARK receipt from Bonsai.
-
-```bash
-RISC0_DEV_MODE=false forge test
-```
-
-### Deploy your project on a testnet
-
-You can deploy your contracts on a testnet such as `Sepolia` and run an end-to-end test or demo as follows:
-
-1. Get access to Bonsai and an Ethereum node running on a given testnet, e.g., Sepolia (in this example, we will be using [alchemy](https://www.alchemy.com/) as our Ethereum node provider) and export the following environment variables:
-
-    ```bash
-    export BONSAI_API_KEY="YOUR_API_KEY" # see form linked in the previous section
-    export BONSAI_API_URL="BONSAI_URL" # provided with your api key
-    export ALCHEMY_API_KEY="YOUR_ALCHEMY_API_KEY" # the API_KEY provided with an alchemy account
-    export DEPLOYER_PRIVATE_KEY="YOUR_WALLET_PRIVATE_KEY" # the private key of your Ethereum testnet wallet e.g., Sepolia
-    ```
-
-2.  Deploy an `IBonsaiRelay` contract by running:
-
-    ```bash
-    RISC0_DEV_MODE=false forge script script/Deploy.s.sol --rpc-url https://eth-sepolia.g.alchemy.com/v2/$ALCHEMY_API_KEY --broadcast
-    ```
-
-3. Check the logs for the address of the deployed `BonsaiRelay` contract and your application contract.
-   Save them to a couple of environment variables to reference later.
-
-    ```bash
-    export BONSAI_RELAY_ADDRESS="#copy relay address from the deploy logs#"
-    export APP_ADDRESS="#copy app address from the deploy logs#"
-    ```
-
-4. Start the Bonsai Ethereum Relay by running:
-
-    ```bash
-    RISC0_DEV_MODE=false cargo run --bin bonsai-ethereum-relay-cli -- run --relay-address "$BONSAI_RELAY_ADDRESS" --eth-node wss://eth-sepolia.g.alchemy.com/v2/$ALCHEMY_API_KEY --eth-chain-id 11155111 --private-key "$DEPLOYER_PRIVATE_KEY"
-    ```
-
-    The relay will keep monitoring the chain for callback requests, generated when your contract calls `bonsaiRelay.requestCallback(...)`, and relay their result back to your contract after computing them.
-    Keep the relay running and switch to a new terminal.
-
-**Interact with your deployment:**
-
-You now have a deployment on a testnet that you can interact with using `cast`, a wallet, or any application you write.
-
-1. Send a transaction to the starter contract:
-
-    ```bash
-    cast send --rpc-url https://eth-sepolia.g.alchemy.com/v2/$ALCHEMY_API_KEY --private-key "$DEPLOYER_PRIVATE_KEY" --gas-limit 100000 "$APP_ADDRESS" 'calculateFibonacci(uint256)' 5
-    ```
-
-2. Check the relayed result:
-
-    ```bash
-    cast call --rpc-url https://eth-sepolia.g.alchemy.com/v2/$ALCHEMY_API_KEY "$APP_ADDRESS" 'fibonacci(uint256)' 5
-    ```
-
-
-## Project Structure
-
-Below are the primary files in the project directory
-
-```text
-.
-├── Cargo.toml                      // Definitions for cargo and rust
-├── foundry.toml                    // Definitions for foundry
-├── contracts                       // Your Ethereum contracts live here
-│   ├── BonsaiStarter.sol           // Starter template for basic callback contract
-│   └── BonsaiStarterLowLevel.sol   // Starter template for low-level callback contract
-├── tests                           // Your Ethereum contract tests live here
-│   ├── BonsaiStarter.t.sol         // Tests for basic callback contract
-│   └── BonsaiStarterLowLevel.t.sol // Tests for low-level callback contract
-└── methods                         // [zkVM guest programs] are built here
-    ├── Cargo.toml
-    ├── build.rs                    // Instructions for the risc0-build rust crate
-    ├── guest                       // A rust crate containing your [zkVM guest programs]
-    │   ├── Cargo.toml
-    │   └── src
-    │       └── bin                 // Your [zkVM guest programs] live here
-    │           └── fibonacci.rs    // Example [guest program] for fibonacci number calculation
-    └── src
-        ├── main.rs                 // Glue binary for locally testing Bonsai applications
-        └── lib.rs                  // Built RISC Zero guest programs are compiled into here
-```
-
-### Contracts
-
-Ethereum contracts should be written in the `contracts` directory, where the two primary starter template contracts live.
-The Solidity libraries for Bonsai can be found at [github.com/risc0/risc0](https://github.com/risc0/risc0/tree/main/bonsai/ethereum)
-
-Contracts are built and tested with [forge], which is part of the [Foundry] toolkit.
-Tests are defined in the `tests` directory.
-
-### Methods
-
-[RISC Zero] guest programs are defined in the `methods` directory.
-This is where you will define one or more guest programs to act as a coprocessor to your on-chain logic.
-More example of what you can do in the guest can be found in the [RISC Zero examples].
-
-Code in the `methods/guest` directory will be compiled into one or more [RISC-V] binaries.
-Each will have a corresponding image ID, which is a hash identifying the program.
-When deploying your application, you will upload your binary to Bonsai where the guest will run when requested.
-The image ID will be included in the deployment of the smart contracts to reference your guest program living in Bonsai.
-
-Build configuration for the methods is included in `methods/build.rs`.
-
-[coprocessor]: https://twitter.com/RiscZero/status/1677316664772132864
-[Bonsai]: https://dev.bonsai.xyz/
-[Foundry]: https://getfoundry.sh/
-[Groth16 SNARK proof]: https://www.risczero.com/news/on-chain-verification
-[RISC Zero examples]: https://github.com/risc0/risc0/tree/main/examples
-[RISC Zero]: https://www.risczero.com/
-[RISC-V]: https://www.risczero.com/docs/reference-docs/about-risc-v
-[https://book.getfoundry.sh/forge/tests]: https://book.getfoundry.sh/forge/tests
-[receipt]: https://dev.risczero.com/zkvm/developer-guide/receipts
-[risc0/risc0]: https://github.com/risc0/risc0/tree/main/bonsai/ethereum-relay
-[zkVM guest program]: https://www.dev.risczero.com/terminology#guest-program
-[zkVM]: https://www.dev.risczero.com/terminology#zero-knowledge-virtual-machine-zkvm
+- Exploration of differential privacy integration.
+- Further optimization of the proof generation process.
+- Implementation of parallelization for proving for batched swaps.
+- Exploration of alternative implementations of request methods.
