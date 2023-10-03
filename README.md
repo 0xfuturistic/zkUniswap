@@ -93,39 +93,43 @@ We have that interactions with the relay are dealt with on-chain using the Bonsa
 
 ```mermaid
 sequenceDiagram
-		participant User
+		actor User
 		participant UniswapV3Pool
 		participant BonsaiRelay
-		participant Relay
+		actor Relay
 
 		User->>UniswapV3Pool: requestSwap
 		break pool already locked
-			UniswapV3Pool->>UniswapV3Pool: revert
+			UniswapV3Pool-->UniswapV3Pool: revert
 		end
 		break not enough paid
-			UniswapV3Pool->>UniswapV3Pool: revert
+			UniswapV3Pool-->UniswapV3Pool: revert
 		end
-		UniswapV3Pool->>UniswapV3Pool: lock
+		UniswapV3Pool->UniswapV3Pool: lock
 		UniswapV3Pool->>BonsaiRelay: requestCallback
-		BonsaiRelay->>BonsaiRelay: emit event
-		BonsaiRelay->>Relay: pick up event
-		Relay->>Relay: compute step
-		note over Relay: obtain receipt
-		Relay->>BonsaiRelay: invokeCallback
-		break verification failed
-			BonsaiRelay->>BonsaiRelay: revert
+		BonsaiRelay->BonsaiRelay: emit event
+		UniswapV3Pool->>User: return payment surplus
+		par is not timed out
+		BonsaiRelay-)+Relay: pick up event
+		Relay->Relay: compute step
+		note left of Relay: produce receipt
+		critical
+		Relay-)-BonsaiRelay: invokeCallback
+		option verification fails
+			BonsaiRelay-->BonsaiRelay: revert
 		end
-		BonsaiRelay->>UniswapV3Pool: call callback
-		break lock timed out
-			UniswapV3Pool->>UniswapV3Pool: revert
-			note over User: anyone can time out lock
-			User->>UniswapV3Pool: timeoutLock
-			UniswapV3Pool->>UniswapV3Pool: unlock
+		critical
+		BonsaiRelay->>UniswapV3Pool: settleSwap
+		option is timed out
+				UniswapV3Pool-->UniswapV3Pool: revert
 		end
 		UniswapV3Pool->>UniswapV3Pool: execute step
-		UniswapV3Pool->>UniswapV3Pool: unlock
-		UniswapV3Pool->>User: return surplus payment
-		
+		UniswapV3Pool->UniswapV3Pool: unlock
+		and is timed out
+			note right of User: anyone can time out lock
+			User->>UniswapV3Pool: timeoutLock
+			UniswapV3Pool->UniswapV3Pool: unlock
+		end
 ```
 
 It’s worth mentioning that the pool can be timed out at any valid point, not necessarily just at the point illustrated in the diagram above.
