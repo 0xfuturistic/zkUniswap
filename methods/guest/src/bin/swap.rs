@@ -9,9 +9,6 @@ use uniswap_v3_math::swap_math::compute_swap_step;
 risc0_zkvm::guest::entry!(main);
 
 fn main() {
-    // Track the number of cycles used by the guest application.
-    let start = env::get_cycle_count();
-
     // Read data sent from the application contract.
     let mut input_bytes = Vec::<u8>::new();
     env::stdin().read_to_end(&mut input_bytes).unwrap();
@@ -48,6 +45,5 @@ fn main() {
         Token::Uint(amount_in),
         Token::Uint(amount_out),
         Token::Uint(fee_amount),
-        Token::Uint((env::get_cycle_count() - start).into()),
     ]));
 }
