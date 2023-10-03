@@ -113,14 +113,12 @@ sequenceDiagram
 		BonsaiRelay-)+Relay: pick up event
 		Relay->Relay: compute step
 		note left of Relay: produce receipt
-		critical
 		Relay-)-BonsaiRelay: invokeCallback
-		option verification fails
+		break verification fails
 			BonsaiRelay-->BonsaiRelay: revert
 		end
-		critical
 		BonsaiRelay->>UniswapV3Pool: settleSwap
-		option is timed out
+		break is timed out
 				UniswapV3Pool-->UniswapV3Pool: revert
 		end
 		UniswapV3Pool->>UniswapV3Pool: execute step
