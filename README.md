@@ -98,7 +98,7 @@ sequenceDiagram
 		participant BonsaiRelay
 		actor Relay
 
-		User->>UniswapV3Pool: requestSwap
+		User-)UniswapV3Pool: requestSwap
 		break pool already locked
 			UniswapV3Pool-->UniswapV3Pool: revert
 		end
@@ -109,7 +109,7 @@ sequenceDiagram
 		UniswapV3Pool->>BonsaiRelay: requestCallback
 		BonsaiRelay->BonsaiRelay: emit event
 		UniswapV3Pool->>User: return payment surplus
-		par is not timed out
+		par
 		BonsaiRelay-)+Relay: pick up event
 		Relay->Relay: compute step
 		note left of Relay: produce receipt
@@ -123,9 +123,12 @@ sequenceDiagram
 		end
 		UniswapV3Pool->>UniswapV3Pool: execute step
 		UniswapV3Pool->UniswapV3Pool: unlock
-		and is timed out
+		and
 			note right of User: anyone can time out lock
 			User->>UniswapV3Pool: timeoutLock
+			break is not timed out
+					UniswapV3Pool-->UniswapV3Pool: revert
+			end
 			UniswapV3Pool->UniswapV3Pool: unlock
 		end
 ```
