@@ -1,9 +1,9 @@
 # 🪢 zkUniswap: exploring zkAMMs
 
 <aside>
-TL;DR: We introduce zkUniswap, a first-of-its-kind zkAMM that uses a zk co-processor to offload the computation of swaps.
+TL;DR: We introduce zkUniswap, a first-of-its-kind zkAMM that uses a zk co-processor to offload the computation of swaps.</aside>
 
-</aside>
+![Alt text](cover.png)
 
 ## What is *zkUniswap*?
 
