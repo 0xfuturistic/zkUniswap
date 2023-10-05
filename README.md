@@ -1,4 +1,4 @@
-# 🪢 zkUniswap
+# 🪢 zkUniswap: a first-of-its-kind zkAMM
 
 <img src="cover.png" alt="image" width="60%">
 
