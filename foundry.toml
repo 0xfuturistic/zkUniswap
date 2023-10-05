@@ -8,3 +8,4 @@ fs_permissions = [{ access = 'read', path = '.' }]
 optimizer = true
 optimizer_runs = 20_000
 gas_reports = ["UniswapV3Pool"]
+solc-version = "0.8.17"
