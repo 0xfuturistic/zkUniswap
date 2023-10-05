@@ -26,7 +26,7 @@ The swap step sits at the core of the execution of a swap. To paraphrase the [do
 3. The amount to be received
 4. The amount of input that will be taken as a fee
 
-Concretely, the step computed by the `[swap](https://github.com/Uniswap/v3-core/blob/main/contracts/UniswapV3Pool.sol#L596)` function in `[UniswapV3Pool](https://github.com/Uniswap/v3-core/blob/main/contracts/UniswapV3Pool.sol)`: 
+Concretely, the step computed by the [swap](https://github.com/Uniswap/v3-core/blob/main/contracts/UniswapV3Pool.sol#L596) function in [UniswapV3Pool](https://github.com/Uniswap/v3-core/blob/main/contracts/UniswapV3Pool.sol): 
 
 ```solidity
 /// simplified for demonstration purposes
@@ -58,7 +58,7 @@ contract UniswapV3Pool {
 }
 ```
 
-The logic is implemented by one of the specialized libraries, `[SwapMath](https://github.com/Uniswap/v3-core/blob/main/contracts/libraries/SwapMath.sol)`.
+The logic is implemented by one of the specialized libraries, [SwapMath](https://github.com/Uniswap/v3-core/blob/main/contracts/libraries/SwapMath.sol).
 
 # Technical Blueprint
 
@@ -70,7 +70,7 @@ The zkVM’s prover produces a [receipt](https://dev.risczero.com/terminology#re
 
 ## On-chain Swap Request and Settlement
 
-A user starts a swap by making a request on-chain, which they do by calling `[requestSwap](https://github.com/0xfuturistic/zkUniswap/blob/main/contracts/UniswapV3Pool.sol#L513)`. They pass the same inputs they’d pass to `swap`. The relay, Bonsai, in this case, picks up the request and computes the step off-chain. The relay then posts the data including the outputs and the proof to the function `invokeCallback`. This function verifies the proof, and if it’s considered valid, the callback function that executes the step is called, namely `settleSwap`.
+A user starts a swap by making a request on-chain, which they do by calling [requestSwap](https://github.com/0xfuturistic/zkUniswap/blob/main/contracts/UniswapV3Pool.sol#L513). They pass the same inputs they’d pass to `swap`. The relay, Bonsai, in this case, picks up the request and computes the step off-chain. The relay then posts the data including the outputs and the proof to the function `invokeCallback`. This function verifies the proof, and if it’s considered valid, the callback function that executes the step is called, namely `settleSwap`.
 
 ### Proof Verification
 
@@ -138,7 +138,7 @@ sequenceDiagram
 
 ## Performance Metrics
 
-The program in the zkVM takes roughly ~154720 cycles. The average amount of gas consumed by `requestSwap` is ~194453 (worst ~254534) and by `settleSwap` is ~64729 (worst ~99998). For reference, an unaltered `swap` call uses about ~71789 (worst ~111999) gas. `requestSwap` can be significantly optimized, which is not the case here since the Bonsai request ends up being more expensive than `swap`.
+The program in the zkVM takes roughly ~154720 cycles. The average amount of gas consumed by `requestSwap` is ~194141 (worst ~254198) and by `settleSwap` is ~64076 (worst ~100000). For reference, an unaltered `swap` call uses about ~71279 (worst ~111330) gas. `requestSwap` can be significantly optimized, which is not the case here since the Bonsai request ends up being more expensive than `swap`.
 
 | UniswapV3Pool contract |  |  |  |  |  |
 | --- | --- | --- | --- | --- | --- |
@@ -183,7 +183,7 @@ Another possibility is for users to make requests by producing an EIP712 signatu
 
 Another idea independently brought up by [Cairo](https://twitter.com/cairoeth) and [jseam](https://twitter.com/henlojseam) is to not rely on locking the pool and instead have the proofs specify how much the state of the pool can change. This would make the execution of the swap conditional in a similar way to how regular swap transactions specify how much slippage they can accept. 
 
-In this approach, the proof would likely be more expensive to make since we’d possibly be generating a proof for the state of the pool itself rather than just for the swap step. In any case, however, this trade-off may still make sense for the benefits in UX from getting rid of locks.
+In this approach, the proof would likely be more expensive to make since we’d possibly be generating a proof for the state of the pool itself rather than just for the swap step. In any case, this trade-off may still make sense for the benefits in UX from getting rid of locks.
 
 ## Future Work
 
