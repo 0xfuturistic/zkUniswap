@@ -31,30 +31,30 @@ Concretely, the step computed by the [swap](https://github.com/Uniswap/v3-core/b
 ```solidity
 /// simplified for demonstration purposes
 contract UniswapV3Pool {
-		function swap(
-		    address recipient,
-		    bool zeroForOne,
-		    int256 amountSpecified,
-		    uint160 sqrtPriceLimitX96,
-		    bytes calldata data
-		) {
-				[...]
-				(
-					state.sqrtPriceX96,
-					step.amountIn,
-					step.amountOut,
-					step.feeAmount
-				) = SwapMath.computeSwapStep(
-				    state.sqrtPriceX96,
-				    (zeroForOne ? step.sqrtPriceNextX96 < sqrtPriceLimitX96 : step.sqrtPriceNextX96 > sqrtPriceLimitX96)
-				        ? sqrtPriceLimitX96
-				        : step.sqrtPriceNextX96,
-				    state.liquidity,
-				    state.amountSpecifiedRemaining,
-				    fee
-				);
-				[...]
-		}
+	function swap(
+		address recipient,
+		bool zeroForOne,
+		int256 amountSpecified,
+		uint160 sqrtPriceLimitX96,
+		bytes calldata data
+	) {
+		[...]
+		(
+			state.sqrtPriceX96,
+			step.amountIn,
+			step.amountOut,
+			step.feeAmount
+		) = SwapMath.computeSwapStep(
+			state.sqrtPriceX96,
+			(zeroForOne ? step.sqrtPriceNextX96 < sqrtPriceLimitX96 : step.sqrtPriceNextX96 > sqrtPriceLimitX96)
+				? sqrtPriceLimitX96
+				: step.sqrtPriceNextX96,
+			state.liquidity,
+			state.amountSpecifiedRemaining,
+			fee
+		);
+		[...]
+	}
 }
 ```
 
