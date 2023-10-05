@@ -3,7 +3,8 @@
 <aside>
 TL;DR: We introduce zkUniswap, a first-of-its-kind zkAMM that uses a zk co-processor to offload the computation of swaps.</aside>
 
-![Alt text](cover.png)
+<br>
+<img src="cover.png" alt="image" width="60%">
 
 ## What is *zkUniswap*?
 
