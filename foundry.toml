@@ -5,5 +5,6 @@ libs = ["lib"]
 test = "tests"
 ffi = true
 fs_permissions = [{ access = 'read', path = '.' }]
-
+optimizer = true
+optimizer_runs = 20_000
 gas_reports = ["UniswapV3Pool"]
