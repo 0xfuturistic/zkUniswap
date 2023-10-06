@@ -1,3 +1,5 @@
+#### Modified from source https://github.com/0xKitsune/uniswap-v3-math
+
 ## ------------------------------------
 ## Tests and Docs are still being written 🏗️.
 Tests are still being written, assume bugs until tested. If you would like to help contribute on the tests or docs, feel free to open up an issue or make a PR.
