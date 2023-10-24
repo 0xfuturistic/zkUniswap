@@ -1,4 +1,4 @@
-# 🪢 zkUniswap: using a zkVM for computing swaps off-chain.
+# 🪢 zkUniswap: using zk for computing swaps off-chain.
 
 <img src="cover.png" alt="image" width="60%">
 
