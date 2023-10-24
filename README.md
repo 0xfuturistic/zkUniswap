@@ -1,4 +1,4 @@
-# 🪢 zkUniswap: an AMM leveraging a zkVM.
+# 🪢 zkUniswap: an AMM using a zkVM for computing swaps.
 
 <img src="cover.png" alt="image" width="60%">
 
